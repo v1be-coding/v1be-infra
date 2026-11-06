@@ -7,6 +7,8 @@ The Foundation for [V1be Coding](https://github.com/v1be-coding), a build series
 | Path | Holds |
 | --- | --- |
 | `stacks/org/` | The Organization, member accounts, SCPs, Identity Center, Budgets, and GitHub org settings and repos |
+| `stacks/accounts/` | Once per member account: state buckets, GitHub OIDC login, CI roles, Cost Anomaly Detection, and the café backups |
+| `modules/` | Pieces the stacks share |
 | `sandbox/` | The Windows Sandbox config that admin logins run in, and the step-by-step wizards |
 | `.devcontainer/` | The container Claude Code works in, which holds no admin login |
 
@@ -19,4 +21,4 @@ The Foundation for [V1be Coding](https://github.com/v1be-coding), a build series
 
 ## Running it
 
-`org` runs only in Windows Sandbox. Copy `sandbox/v1be-admin.wsb.example` to `sandbox/v1be-admin.wsb`, set your folder path, open it, then run `sandbox/wizards/org-apply.sh` in Git Bash.
+`org` and `accounts` run only in Windows Sandbox. Copy `sandbox/v1be-admin.wsb.example` to `sandbox/v1be-admin.wsb`, set your folder path, and open it. In Git Bash, run `sandbox/wizards/org-apply.sh` for `org`, or `sandbox/wizards/accounts-apply.sh portfolio` and then `cafe` for `accounts`.
