@@ -24,4 +24,6 @@ The Foundation for [V1be Coding](https://github.com/v1be-coding), a build series
 
 `org` and `accounts` run only in Windows Sandbox. Copy `sandbox/v1be-admin.wsb.example` to `sandbox/v1be-admin.wsb`, set your folder path, and open it. In Git Bash, run `sandbox/wizards/org-apply.sh` for `org`, or `sandbox/wizards/accounts-apply.sh portfolio` and then `cafe` for `accounts`.
 
+`sandbox/wizards/github-template-access.sh` gives the bot's token Issues access and saves the Infracost key as an organization secret, once, before `org-apply.sh` adds the template's rules.
+
 `edge` runs in GitHub Actions after a merge, once the owner approves the apply. `sandbox/wizards/edge-setup.sh` sets it up the first time.

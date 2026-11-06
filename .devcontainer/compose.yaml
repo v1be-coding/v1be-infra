@@ -10,6 +10,8 @@ services:
     command: bash
     stdin_open: true
     tty: true
+    # Chromium runs out of room in Docker's default 64 MB.
+    shm_size: 1gb
     cap_drop:
       - ALL
     security_opt:
@@ -18,11 +20,14 @@ services:
       - type: bind
         source: ../..
         target: /workspaces/v1be
+      # Episode repos live here, where Windows can't reach their git hooks.
+      - episodes:/workspaces/v1be/episodes
       - claude-config:/home/dev/.claude-config
       - gh-config:/home/dev/.config/gh
       - aws-config:/home/dev/.aws
 
 volumes:
+  episodes:
   claude-config:
   gh-config:
   aws-config:
