@@ -1,0 +1,8 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+*.tfvars
+!stacks/episodes.tfvars
+crash.log
+sandbox/v1be-admin.wsb

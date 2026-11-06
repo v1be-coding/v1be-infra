@@ -1,0 +1,28 @@
+# Run with plain Compose, not VS Code's Dev Containers feature, which can forward
+# the host's Git credentials into the container.
+name: v1be
+
+services:
+  dev:
+    build: .
+    image: v1be-dev
+    working_dir: /workspaces/v1be
+    command: bash
+    stdin_open: true
+    tty: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - type: bind
+        source: ../..
+        target: /workspaces/v1be
+      - claude-config:/home/dev/.claude-config
+      - gh-config:/home/dev/.config/gh
+      - aws-config:/home/dev/.aws
+
+volumes:
+  claude-config:
+  gh-config:
+  aws-config:
