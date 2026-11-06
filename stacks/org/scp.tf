@@ -50,6 +50,39 @@ data "aws_iam_policy_document" "allowed_services" {
     resources   = ["*"]
   }
 
+  # Everything stays in Singapore. These exemptions follow AWS's sample Region SCP,
+  # limited to services on the allowlists: they're global, or CloudFront needs them
+  # in us-east-1. CloudWatch reads are exempt for CloudFront's metrics.
+  statement {
+    sid    = "DenyOtherRegions"
+    effect = "Deny"
+    not_actions = [
+      "acm:*",
+      "budgets:*",
+      "ce:*",
+      "cloudfront-keyvaluestore:*",
+      "cloudfront:*",
+      "cloudwatch:Describe*",
+      "cloudwatch:Get*",
+      "cloudwatch:List*",
+      "health:*",
+      "iam:*",
+      "kms:*",
+      "s3:GetAccountPublic*",
+      "s3:ListAllMyBuckets",
+      "s3:PutAccountPublic*",
+      "sts:*",
+      "support:*",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringNotEquals"
+      variable = "aws:RequestedRegion"
+      values   = ["ap-southeast-1"]
+    }
+  }
+
   # People sign in with Identity Center and CI with OIDC, so nothing needs an IAM
   # user or a long-lived key. Blocking them removes a common way to keep access
   # after a breach.
@@ -100,7 +133,7 @@ resource "aws_organizations_policy" "allowed_services" {
   for_each = local.allowed_services
 
   name        = "v1be-allowed-services-${each.key}"
-  description = "Denies every AWS service not listed for this account, plus IAM users and access keys."
+  description = "Denies unlisted services, other Regions, and IAM users and access keys."
   type        = "SERVICE_CONTROL_POLICY"
   content     = data.aws_iam_policy_document.allowed_services[each.key].json
 
