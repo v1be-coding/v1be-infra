@@ -1,0 +1,64 @@
+#!/usr/bin/env node
+// Prints a GitHub token for the agent's App, for the gh wrapper beside this file.
+// Install tokens last an hour, so one is cached and replaced five minutes early.
+// bot-identity.sh saves the key and IDs in the gh-config volume (ADR-0012).
+"use strict";
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const dir = path.join(process.env.HOME, ".config/gh/app");
+const cachePath = path.join(dir, "token.json");
+const refreshMargin = 5 * 60 * 1000;
+
+function cachedToken() {
+  try {
+    const { token, expiresAt } = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+    return Date.parse(expiresAt) - Date.now() > refreshMargin ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+function base64url(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+// GitHub allows these 10 minutes at most. The start is backdated for clock drift.
+function appJwt(appId, key) {
+  const now = Math.floor(Date.now() / 1000);
+  const body = [
+    base64url(JSON.stringify({ alg: "RS256", typ: "JWT" })),
+    base64url(JSON.stringify({ iat: now - 60, exp: now + 540, iss: String(appId) })),
+  ].join(".");
+  return `${body}.${crypto.sign("sha256", Buffer.from(body), key).toString("base64url")}`;
+}
+
+async function mintToken() {
+  const { appId, installationId } = JSON.parse(fs.readFileSync(path.join(dir, "app.json"), "utf8"));
+  const key = fs.readFileSync(path.join(dir, "key.pem"), "utf8");
+  const response = await fetch(`https://api.github.com/app/installations/${installationId}/access_tokens`, {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${appJwt(appId, key)}`,
+      "User-Agent": "v1be-app-token",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (!response.ok) throw new Error(`GitHub refused the App token (HTTP ${response.status})`);
+  const { token, expires_at: expiresAt } = await response.json();
+
+  // Written to one side first, so a parallel call never reads half a file.
+  const pending = `${cachePath}.${process.pid}`;
+  fs.writeFileSync(pending, JSON.stringify({ token, expiresAt }), { mode: 0o600 });
+  fs.renameSync(pending, cachePath);
+  return token;
+}
+
+(async () => {
+  process.stdout.write(cachedToken() ?? (await mintToken()));
+})().catch((error) => {
+  console.error(`app-token: ${error.message}`);
+  process.exit(1);
+});

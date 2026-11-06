@@ -24,7 +24,7 @@ resource "github_organization_settings" "this" {
   name          = "V1be Coding"
   description   = "A build series: each app goes from spec to deployed in one agent run."
 
-  # v1be-bot gets write access repo by repo, and only owners create repos.
+  # The agent reaches repos through its App, and only owners create repos.
   default_repository_permission           = "read"
   members_can_create_repositories         = false
   members_can_create_public_repositories  = false
@@ -69,14 +69,6 @@ resource "github_repository" "this" {
       status = "enabled"
     }
   }
-}
-
-resource "github_repository_collaborator" "bot" {
-  for_each = local.repositories
-
-  repository = github_repository.this[each.key].name
-  username   = "v1be-bot"
-  permission = "push"
 }
 
 locals {

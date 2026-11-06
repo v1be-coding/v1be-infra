@@ -282,7 +282,7 @@ note "Nothing changes in Cloudflare or AWS until you approve the apply in stage 
 pause
 
 stage "Sign in to GitHub"
-step "Sign in with your own GitHub account, the org owner, not v1be-bot."
+step "Sign in with your own GitHub account, the org owner."
 gh auth status >/dev/null 2>&1 || gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo,workflow
 ORG_ROLE="$(gh api user/memberships/orgs/v1be-coding --jq .role 2>/dev/null | tr -d '\r' || true)"
 if [[ "$ORG_ROLE" != "admin" ]]; then

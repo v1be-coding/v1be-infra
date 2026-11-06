@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Runs the real gh as the agent's App, with a fresh token on every call, so runs
+# longer than an hour keep working. It also paces calls, as GitHub's API guidance
+# asks: one at a time, a second between writes, and no fast polling.
+# Each process can still call the real gh directly, so this catches mistakes only.
+set -euo pipefail
+
+real_gh=/usr/local/bin/gh
+lock_file="$HOME/.config/gh/app/gh.lock"
+
+refuse() {
+  echo "gh wrapper: $1" >&2
+  exit 2
+}
+
+# True when this call is a long watch, which mustn't hold the lock.
+is_watch() {
+  [[ "${1:-} ${2:-}" == "pr checks" ]] && [[ " $* " == *" --watch "* ]]
+}
+
+check_polling() {
+  [[ "${1:-} ${2:-}" == "run watch" ]] && refuse "gh run watch polls too fast. Use: gh pr checks --watch --interval 60"
+  is_watch "$@" || return 0
+  local previous="" argument interval=10
+  for argument in "$@"; do
+    [[ "$previous" == "--interval" || "$previous" == "-i" ]] && interval="$argument"
+    [[ "$argument" == --interval=* ]] && interval="${argument#--interval=}"
+    previous="$argument"
+  done
+  (( interval >= 60 )) || refuse "gh pr checks --watch needs --interval 60 or slower"
+}
+
+is_write() {
+  case "${1:-}" in
+    api)
+      [[ " $* " =~ \ (-X|--method|-f|-F|--raw-field|--field|--input)[\ =] ]] || [[ " $* " == *" --method="* ]]
+      ;;
+    pr | issue | run | repo | label | release)
+      [[ ! "${2:-}" =~ ^(view|list|status|checks|diff)$ ]]
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+check_polling "$@"
+
+GH_TOKEN="$("$(dirname "$0")/app-token")"
+export GH_TOKEN
+
+# git's sign-in and long watches skip the queue.
+if [[ "${1:-} ${2:-}" == "auth git-credential" ]] || is_watch "$@"; then
+  exec "$real_gh" "$@"
+fi
+
+exec 9>"$lock_file"
+flock 9
+status=0
+"$real_gh" "$@" || status=$?
+if is_write "$@"; then sleep 1; fi
+exit "$status"

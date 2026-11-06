@@ -200,7 +200,7 @@ finish() {
 
 run_wizard() {
 
-TOTAL_STAGES=7
+TOTAL_STAGES=3
 
 # The owner login happens only in Windows Sandbox (ADR-0012). This folder exists
 # only there, through the mapping in v1be-admin.wsb.
@@ -209,18 +209,14 @@ if [[ ! -d /c/code/v1be-infra/sandbox ]]; then
   exit 1
 fi
 
-banner "GitHub: v1be-coding org and v1be-bot"
+banner "GitHub: v1be-coding org"
 
 stage "Before you start"
-say "This wizard switches between two places, so watch the label on each stage:"
-step "SANDBOX: your own GitHub account, which will own the org."
-step "WINDOWS: a private window for v1be-bot only, because the token must be pasted."
-warn "Never sign in to your own GitHub account in the Windows private window."
-warn "Never paste the bot's password or token into Claude."
-say "Have these ready: your phone, and a password manager you can reach from Windows."
+say "This creates the org, owned by your own GitHub account."
+note "github-app.sh then creates the agent's App."
 pause "Press Enter when you're ready."
 
-stage "SANDBOX: create the org"
+stage "Create the org"
 open_url "https://github.com/account/organizations/new?plan=free"
 step "Sign in with your own GitHub account."
 step "Organization name: v1be-coding"
@@ -232,67 +228,16 @@ if ! confirm "Does github.com/v1be-coding exist now, owned by you?"; then
   exit 1
 fi
 
-stage "WINDOWS: create the bot account"
-say "On Windows, open a new InPrivate or Incognito window, then go to:"
-say "  https://github.com/signup"
-step "Email: your Gmail with +v1be-bot before the @."
-step "Password: a new one, saved in your password manager as v1be-bot."
-step "Username: v1be-bot"
-step "Verify the email from your phone."
-step "In Settings, then Password and authentication, turn on two-factor."
-step "Use your authenticator app and label the entry v1be-bot."
-step "Save the recovery codes in the v1be-bot password manager entry."
-note "GitHub's terms allow one free machine account beside your personal one."
-pause "Press Enter when v1be-bot exists and has two-factor on."
-
-stage "SANDBOX: invite the bot"
-open_url "https://github.com/orgs/v1be-coding/people"
-step "Choose Invite member, and enter v1be-bot."
-warn "Choose the Member role, not Owner."
-step "Send the invitation."
-pause "Press Enter when it's sent."
-
-stage "WINDOWS: accept and create the token"
-say "In the private window, signed in as v1be-bot:"
-say "  https://github.com/orgs/v1be-coding/invitation"
-step "Accept the invitation."
-say "Then go to:"
-say "  https://github.com/settings/personal-access-tokens/new"
-step "Token name: v1be-dev-container"
-step "Expiration: 90 days"
-step "Resource owner: v1be-coding"
-step "Repository access: All repositories."
-warn "No repos exist yet, and the bot's real access is set later in phase B."
-step "Repository permissions: Contents, Issues and Pull requests, each read and write."
-warn "Add nothing else. Metadata read-only may appear by itself, and that's fine."
-step "Generate the token. If it asks for a reason, enter: v1be dev container."
-warn "GitHub shows it once. Paste it straight into the v1be-bot password manager entry."
-note "Don't save it to a file, and don't share it with Claude."
-step "Sign out of v1be-bot, and close the private window."
-pause "Press Enter when the token is saved and you've signed out."
-
-stage "SANDBOX: approve the token"
-open_url "https://github.com/organizations/v1be-coding/settings/personal-access-token-requests"
-step "Open the request from v1be-bot."
-step "Check it lists only Contents, Issues, Pull requests and Metadata."
-if ! confirm "Does it list only those permissions?"; then
-  warn "Stopping. Don't approve it. Tell Claude what else it lists."
-  exit 1
-fi
-step "Approve it."
-pause "Press Enter when it's approved."
-
 stage "Last check"
 open_url "https://github.com/orgs/v1be-coding/people"
-step "Check you're listed as Owner, and v1be-bot as Member."
-if ! confirm "Are the two roles right?"; then
+step "Check you're listed as Owner."
+if ! confirm "Is your role right?"; then
   warn "Stopping. Tell Claude what the page shows."
   exit 1
 fi
 
 finish
-say "Tell Claude that the org and bot exist, the token is approved, and the roles are right."
-note "Don't share the token, password or recovery codes."
+say "Next, run github-app.sh."
 }
 
 run_wizard "$@"; exit

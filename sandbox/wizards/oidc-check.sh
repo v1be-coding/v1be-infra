@@ -258,7 +258,7 @@ if [[ ! "$PORTFOLIO_ID" =~ ^[0-9]{12}$ || ! "$CAFE_ID" =~ ^[0-9]{12}$ ]]; then
   warn "Stopping: couldn't find both member accounts."
   exit 1
 fi
-step "Sign in with your own GitHub account, the org owner, not v1be-bot."
+step "Sign in with your own GitHub account, the org owner."
 gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo,workflow
 ORG_ROLE="$(gh api user/memberships/orgs/v1be-coding --jq .role 2>/dev/null | tr -d '\r' || true)"
 if [[ "$ORG_ROLE" != "admin" ]]; then

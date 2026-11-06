@@ -241,7 +241,7 @@ say "PASS: signed in to the management account"
 pause
 
 stage "Sign in to GitHub"
-step "Sign in with your own GitHub account, the org owner, not v1be-bot."
+step "Sign in with your own GitHub account, the org owner."
 note "This login stays in the Sandbox, and Terraform gets it for this run only."
 gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo
 GITHUB_TOKEN="$(gh auth token | tr -d '\r')"
