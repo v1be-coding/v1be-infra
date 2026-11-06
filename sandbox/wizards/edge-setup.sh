@@ -252,7 +252,10 @@ wait_for_job() { # job name. Fails unless the job succeeds.
 scan_log() { # job name
   local id hits
   id="$(job_field "$1" id)"
-  JOB_LOG="$(gh api "repos/$REPO/actions/jobs/$id/logs" | tr -d '\r')"
+  # Logs hold colour codes, which gh refuses to output by default. This only goes
+  # into a variable, and the codes are stripped before anything reads it.
+  JOB_LOG="$(gh api --allow-escape-sequences "repos/$REPO/actions/jobs/$id/logs" \
+    | tr -d '\r' | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g')"
   if [[ -z "$JOB_LOG" ]]; then
     warn "Stopping: couldn't read the $1 log, so nothing is proven."
     exit 1
@@ -280,7 +283,7 @@ pause
 
 stage "Sign in to GitHub"
 step "Sign in with your own GitHub account, the org owner, not v1be-bot."
-gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo,workflow
+gh auth status >/dev/null 2>&1 || gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo,workflow
 ORG_ROLE="$(gh api user/memberships/orgs/v1be-coding --jq .role 2>/dev/null | tr -d '\r' || true)"
 if [[ "$ORG_ROLE" != "admin" ]]; then
   warn "Stopping: this GitHub login isn't a v1be-coding owner."
@@ -302,6 +305,10 @@ say "PASS: signed in, edge is on main, and both environments have the account ID
 pause
 
 stage "Check the zone, then store the token"
+if gh secret list --repo "$REPO" --env apply | grep -q "^CLOUDFLARE_API_TOKEN" \
+  && confirm "The token is already stored. Skip this stage?"; then
+  say "Skipped: using the stored token."
+else
 say "Copy the token, then paste it here. It's hidden, so you won't see anything."
 step "To paste in Git Bash: right-click, or Shift+Insert. Ctrl+V doesn't work."
 CF_TOKEN=""
@@ -351,6 +358,7 @@ for environment in plan apply; do
 done
 unset CF_TOKEN ZONE_JSON RULESETS
 say "PASS: token stored on plan and apply"
+fi
 pause
 
 stage "Add the workflow"
@@ -372,7 +380,13 @@ fi
 pause
 
 stage "Run the plan alone"
-start_run
+RUN_ID="$(gh run list --repo "$REPO" --workflow deploy.yml --status waiting --limit 1 --json databaseId --jq '.[0].databaseId // ""' | tr -d '\r')"
+if [[ -n "$RUN_ID" ]]; then
+  say "Using the run that's already waiting for approval."
+  open_url "https://github.com/$REPO/actions/runs/$RUN_ID"
+else
+  start_run
+fi
 note "The workflow's plan job is running. This waits for it."
 wait_for_job plan
 scan_log plan
