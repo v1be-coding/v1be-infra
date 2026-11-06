@@ -1,0 +1,76 @@
+# .github/workflows/pr-checks.yml
+# The user commits this file, because v1be-bot can't write workflows (ADR-0012).
+name: pr-checks
+
+on:
+  pull_request: # never pull_request_target
+
+permissions: {} # nothing unless a job asks
+
+jobs:
+  risky-text: # The required check. Don't add a paths filter.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Get the checker from main, not from the PR
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.BASE }}
+          path: base
+          persist-credentials: false
+      - name: Get the PR as files. Nothing in here is ever run.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the PR as text
+        run: |
+          git -C pr diff --name-only --diff-filter=ACMRT "$BASE...$HEAD" > changed.txt
+          bash base/ci/check-pr-text.sh "$PWD/pr" changed.txt | tee result.txt
+          status=${PIPESTATUS[0]}
+          { echo '### Text check'; echo '```'; cat result.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+  advisory: # Not required. Runs only after the text check passes.
+    needs: risky-text
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      HEAD: ${{ github.event.pull_request.head.sha }}
+      TERRAFORM_VERSION: 1.17.1
+      TERRAFORM_SHA256: 4638628058e71a55212b1c563712eac03b902128f40740f3dc8174df12135061
+      TFLINT_VERSION: 0.65.0
+      TFLINT_SHA256: d4c545ed2e29d6338604b586f34f544f380f70f243aa72f7b484713835eaec61
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD }}
+          path: pr
+          persist-credentials: false
+      - name: Install tools at fixed versions
+        run: |
+          curl -fsSLo terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "$TERRAFORM_SHA256  terraform.zip" | sha256sum -c -
+          unzip -q terraform.zip terraform
+          curl -fsSLo tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_amd64.zip"
+          echo "$TFLINT_SHA256  tflint.zip" | sha256sum -c -
+          unzip -q tflint.zip tflint
+      - name: terraform fmt
+        run: ./terraform -chdir=pr fmt -check -recursive || true
+      - name: terraform validate
+        run: |
+          for stack in pr/stacks/*/; do
+            ./terraform -chdir="$stack" init -backend=false -lockfile=readonly -input=false
+            ./terraform -chdir="$stack" validate
+          done
+      - name: tflint
+        run: cd pr && ../tflint --recursive --format compact || true
