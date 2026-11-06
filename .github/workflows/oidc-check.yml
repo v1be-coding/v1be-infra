@@ -1,0 +1,98 @@
+# .github/workflows/oidc-check.yml
+# Temporary: proves who can sign in to the v1be-infra CI roles (ADR-0011), then
+# gets removed, because only the push-to-main workflow may name an environment.
+# It runs nothing from the repo and prints no credentials. Run it from
+# sandbox/wizards/oidc-check.sh.
+name: oidc-check
+
+on:
+  workflow_dispatch:
+
+permissions: {} # nothing unless a job asks
+
+jobs:
+  with-environment:
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [plan, apply]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: ${{ matrix.environment }}
+    permissions:
+      id-token: write
+    env:
+      AWS_REGION: ap-southeast-1
+      ENVIRONMENT: ${{ matrix.environment }}
+      PORTFOLIO_ACCOUNT_ID: ${{ secrets.PORTFOLIO_ACCOUNT_ID }}
+      CAFE_ACCOUNT_ID: ${{ secrets.CAFE_ACCOUNT_ID }}
+    steps:
+      - name: Its own role lets it in, and the other refuses
+        run: |
+          token=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          echo "::add-mask::$token"
+          printf %s "$token" > token
+          payload=$(cut -d. -f2 token | tr '_-' '/+')
+          while (( ${#payload} % 4 )); do payload+='='; done
+          echo "Token sub: $(base64 -d <<<"$payload" | jq -r .sub)"
+          try() { # role, account, expected result
+            local result
+            if aws sts assume-role-with-web-identity --role-arn "arn:aws:iam::$2:role/$1" \
+              --role-session-name oidc-check --web-identity-token "file://$PWD/token" \
+              --query Credentials.Expiration --output text >/dev/null 2>err; then
+              result=allowed
+            elif grep -q AccessDenied err; then
+              result=refused
+            else
+              result=error; cat err
+            fi
+            echo "$1: $result, expected $3"
+            [ "$result" = "$3" ] || failed=1
+          }
+          failed=0
+          other=plan; [ "$ENVIRONMENT" = plan ] && other=apply
+          for id in "$PORTFOLIO_ACCOUNT_ID" "$CAFE_ACCOUNT_ID"; do
+            [ -n "$id" ] || { echo "An account ID secret is missing"; exit 1; }
+            try "v1be-infra-$ENVIRONMENT" "$id" allowed
+            try "v1be-infra-$other" "$id" refused
+          done
+          rm -f token err
+          exit "$failed"
+
+  no-environment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+    env:
+      AWS_REGION: ap-southeast-1
+      PORTFOLIO_ACCOUNT_ID: ${{ secrets.PORTFOLIO_ACCOUNT_ID }}
+      CAFE_ACCOUNT_ID: ${{ secrets.CAFE_ACCOUNT_ID }}
+    steps:
+      - name: Every role refuses a job with no environment
+        run: |
+          token=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          echo "::add-mask::$token"
+          printf %s "$token" > token
+          payload=$(cut -d. -f2 token | tr '_-' '/+')
+          while (( ${#payload} % 4 )); do payload+='='; done
+          echo "Token sub: $(base64 -d <<<"$payload" | jq -r .sub)"
+          failed=0
+          for id in "$PORTFOLIO_ACCOUNT_ID" "$CAFE_ACCOUNT_ID"; do
+            [ -n "$id" ] || { echo "An account ID secret is missing"; exit 1; }
+            for role in v1be-infra-plan v1be-infra-apply; do
+              if aws sts assume-role-with-web-identity --role-arn "arn:aws:iam::$id:role/$role" \
+                --role-session-name oidc-check --web-identity-token "file://$PWD/token" \
+                --query Credentials.Expiration --output text >/dev/null 2>err; then
+                echo "$role: allowed, expected refused"; failed=1
+              elif grep -q AccessDenied err; then
+                echo "$role: refused, as expected"
+              else
+                echo "$role: unexpected error"; cat err; failed=1
+              fi
+            done
+          done
+          rm -f token err
+          exit "$failed"
