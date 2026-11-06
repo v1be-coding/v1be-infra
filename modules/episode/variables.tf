@@ -22,3 +22,18 @@ variable "oidc_provider_arn" {
   description = "GitHub's OIDC login in this account, from the accounts stack."
   type        = string
 }
+
+variable "hostname" {
+  description = "The public address of this target, such as ulam.example.com."
+  type        = string
+}
+
+variable "zone_id" {
+  description = "The Cloudflare zone that holds the hostname."
+  type        = string
+}
+
+variable "origin_access_control_id" {
+  description = "The edge stack's origin access control in this account."
+  type        = string
+}

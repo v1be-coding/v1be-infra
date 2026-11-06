@@ -7,3 +7,8 @@ output "boundary_name" {
   description = "The boundary every role made by CI must carry."
   value       = aws_iam_policy.boundary.name
 }
+
+output "distribution_id" {
+  description = "This target's production distribution."
+  value       = aws_cloudfront_distribution.site.id
+}

@@ -12,6 +12,8 @@ locals {
   functions     = "arn:aws:lambda:ap-southeast-1:${var.account_id}:function:${local.prefix}-*"
   log_groups    = "arn:aws:logs:ap-southeast-1:${var.account_id}:log-group:/aws/lambda/${local.prefix}-*"
   apis          = "arn:aws:apigateway:ap-southeast-1::/apis"
+  site_bucket   = "${local.prefix}-site-${var.account}"
+  api_name      = "${local.prefix}-api"
 
   # Portfolio: branch environments through a PR, and main for production and
   # schedules. Café: only GitHub's approved production environment (ADR-0005).
@@ -105,6 +107,31 @@ data "aws_iam_policy_document" "ci" {
     resources = [local.ssm_path]
   }
 
+
+  # Deploying the site is all a run does at the edge (ADR-0010).
+  statement {
+    sid       = "ListOwnSite"
+    actions   = ["s3:GetBucketLocation", "s3:ListBucket"]
+    resources = ["arn:aws:s3:::${local.site_bucket}"]
+  }
+
+  statement {
+    sid       = "DeployOwnSite"
+    actions   = ["s3:DeleteObject", "s3:GetObject", "s3:PutObject"]
+    resources = ["arn:aws:s3:::${local.site_bucket}/*"]
+  }
+
+  statement {
+    sid       = "ClearOwnCache"
+    actions   = ["cloudfront:CreateInvalidation"]
+    resources = [aws_cloudfront_distribution.site.arn]
+  }
+
+  statement {
+    sid       = "FindDistributions"
+    actions   = ["cloudfront:ListDistributions"]
+    resources = ["*"]
+  }
   statement {
     sid       = "ManageOwnFunctions"
     actions   = ["lambda:*"]

@@ -110,6 +110,20 @@ data "aws_iam_policy_document" "apply" {
     resources = ["arn:aws:ssm:ap-southeast-1:${var.account_id}:parameter/*/internal/*"]
   }
 
+  # Each episode's production edge: its site bucket, and its API shell, which
+  # the template fills in (ADR-0010).
+  statement {
+    sid       = "ManageEpisodeSites"
+    actions   = ["s3:*"]
+    resources = ["arn:aws:s3:::v1be-*-site-*", "arn:aws:s3:::v1be-*-site-*/*"]
+  }
+
+  statement {
+    sid       = "ManageEpisodeApis"
+    actions   = ["apigateway:*"]
+    resources = ["arn:aws:apigateway:ap-southeast-1::/apis", "arn:aws:apigateway:ap-southeast-1::/apis/*", "arn:aws:apigateway:ap-southeast-1::/tags/*"]
+  }
+
   # episodes makes each episode's CI role and boundary.
   statement {
     sid = "ManageEpisodeRoles"
