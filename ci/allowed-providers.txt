@@ -1,0 +1,4 @@
+registry.terraform.io/cloudflare/cloudflare
+registry.terraform.io/hashicorp/aws
+registry.terraform.io/hashicorp/random
+registry.terraform.io/integrations/github
