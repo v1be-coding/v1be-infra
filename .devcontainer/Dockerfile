@@ -56,8 +56,8 @@ RUN useradd --create-home --uid 1000 --shell /bin/bash dev \
  && mkdir -p /home/dev/.aws /home/dev/.claude-config /home/dev/.config/gh /workspaces/v1be/episodes \
  && chown -R dev:dev /home/dev/.aws /home/dev/.claude-config /home/dev/.config /workspaces/v1be/episodes \
  && git config --system safe.directory /workspaces/v1be/v1be-infra \
- && git config --system user.name v1be-bot \
- && git config --system user.email 352911507+v1be-bot@users.noreply.github.com \
+ && git config --system user.name 'v1be-agent[bot]' \
+ && git config --system user.email '353549221+v1be-agent[bot]@users.noreply.github.com' \
  && git config --system credential.https://github.com.helper '!gh auth git-credential'
 
 ENV GIT_TERMINAL_PROMPT=0 \
@@ -67,4 +67,6 @@ ENV GIT_TERMINAL_PROMPT=0 \
     PATH=/home/dev/.local/bin:$PATH
 
 USER dev
+# The wrapper goes ahead of the real gh on PATH, and signs in as the App.
+COPY --chmod=755 --chown=dev:dev bin/ /home/dev/.local/bin/
 RUN curl -fsSL https://claude.ai/install.sh | bash -s "${CLAUDE_CODE_VERSION}"

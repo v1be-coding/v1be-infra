@@ -14,11 +14,11 @@ What to do when something goes wrong. Admin, GitHub owner and Cloudflare logins 
 
 ## Lost or stolen laptop
 
-The dev container's volumes hold `v1be-bot`'s token and the `claude-readonly` session. Neither is an admin login, but treat both as exposed. From another device:
+The dev container's volumes hold the `v1be-agent` App's private key and the `claude-readonly` session. Neither is an admin login, but treat both as exposed. From another device:
 
 1. Change your Gmail password and sign out of other sessions.
 2. Change your password manager's master password.
-3. In GitHub, revoke `v1be-bot`'s token, and sign out your own sessions.
+3. In GitHub, delete the `v1be-agent` App's private key, and sign out your own sessions.
 4. In IAM Identity Center, revoke the sessions of `v1be-admin` and `claude-readonly`.
 5. Roll the Cloudflare token and update it on the `plan` and `apply` environments.
 6. Sign out of Anthropic, and check for API keys you don't recognise.
@@ -57,5 +57,5 @@ In the Sandbox, as owner:
 
 | Token | Lasts | To renew |
 | --- | --- | --- |
-| `v1be-bot` | 90 days | Create a new one, get it approved in the org, then run `.devcontainer/bot-identity.sh` |
+| `v1be-agent` private key | Never expires, so rotate every 90 days | In Windows Sandbox, generate a new one on the App's page. Run `.devcontainer/bot-identity.sh`, then delete the old key |
 | `v1be-infra-edge` (Cloudflare) | One year | Roll it, then update the `plan` and `apply` environments |

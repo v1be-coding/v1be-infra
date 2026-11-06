@@ -201,9 +201,9 @@ finish() {
 
 run_wizard() {
 
-TOTAL_STAGES=3
+TOTAL_STAGES=5
 
-# The bot's token belongs in the dev container (ADR-0012). This path exists there
+# The App's key belongs in the dev container (ADR-0012). This path exists there
 # and not in Windows Sandbox.
 if [[ ! -f /.dockerenv || ! -d /workspaces/v1be/v1be-infra/.devcontainer ]]; then
   warn "Stopping: this isn't the dev container. See step 8 in the handoff."
@@ -214,54 +214,80 @@ if [[ ! -w "$HOME/.config/gh" ]] || ! grep -q " $HOME/.config/gh " /proc/mounts;
   exit 1
 fi
 
-banner "Dev container: v1be-bot identity"
+banner "Dev container: the agent's GitHub App"
 
 stage "Before you start"
-say "This signs the dev container's gh and git in as v1be-bot."
-step "Open your password manager and find v1be-dev-container."
-step "That's the GitHub token, not the Cloudflare one."
-note "It's kept in the gh-config volume so it survives new containers."
-note "Claude can use it there, which ADR-0012 expects. Don't paste it into chat."
-note "To renew the token, run this wizard again."
+say "This signs the dev container's gh and git in as the agent's GitHub App."
+step "Open your password manager and find the v1be-agent entry."
+step "You'll need the App ID, the installation ID, the slug and the private key."
+note "They're kept in the gh-config volume so they survive new containers."
+note "Claude can use the key there, which ADR-0012 expects. Don't paste it into chat."
+note "To change the key, run this wizard again."
 pause
 
-stage "Paste the token"
-say "Copy the token, then paste it here. It's hidden, so you won't see anything."
-step "To paste: right-click, or Ctrl+Shift+V."
-BOT_TOKEN=""
-ask_secret BOT_TOKEN "v1be-bot token" || true
-BOT_TOKEN="${BOT_TOKEN//[[:space:]]/}"
-if [[ -z "$BOT_TOKEN" ]]; then
-  warn "Stopping: nothing was pasted. Run the wizard again."
+stage "Enter the App's details"
+APP_ID=""; INSTALLATION_ID=""; APP_SLUG=""
+ask APP_ID "App ID:" || true
+ask INSTALLATION_ID "Installation ID:" || true
+ask APP_SLUG "Slug (usually v1be-agent):" || true
+if [[ ! "$APP_ID" =~ ^[0-9]+$ || ! "$INSTALLATION_ID" =~ ^[0-9]+$ || ! "$APP_SLUG" =~ ^[a-z0-9-]+$ ]]; then
+  warn "Stopping: the IDs must be numbers, and the slug lowercase. Run the wizard again."
   exit 1
 fi
-if ! gh auth login --hostname github.com --with-token <<<"$BOT_TOKEN" >/dev/null 2>&1; then
-  unset BOT_TOKEN
-  warn "Stopping: GitHub refused the token. Check it's the right one and hasn't expired."
+pause
+
+stage "Paste the private key"
+say "Copy the whole key, with its BEGIN and END lines, then paste it here."
+say "It's hidden, so you won't see anything."
+step "To paste: right-click, or Ctrl+Shift+V. Accept any multi-line warning."
+APP_DIR="$HOME/.config/gh/app"
+(umask 077 && mkdir -p "$APP_DIR")
+KEY_FILE="$APP_DIR/key.pem"
+KEY_TEXT=""
+while IFS= read -rs KEY_LINE; do
+  KEY_TEXT+="${KEY_LINE%$'\r'}"$'\n'
+  [[ "$KEY_LINE" == *"-----END"* ]] && break
+done
+(umask 077 && printf '%s' "$KEY_TEXT" > "$KEY_FILE")
+unset KEY_TEXT KEY_LINE
+if ! openssl pkey -noout -in "$KEY_FILE" >/dev/null 2>&1; then
+  rm -f "$KEY_FILE"
+  warn "Stopping: that isn't a whole private key. Run the wizard again."
   exit 1
 fi
-unset BOT_TOKEN
+(umask 077 && printf '{"appId":%s,"installationId":%s,"slug":"%s"}\n' \
+  "$APP_ID" "$INSTALLATION_ID" "$APP_SLUG" > "$APP_DIR/app.json")
+rm -f "$APP_DIR/token.json"
 say "Saved."
+pause
+
+stage "Remove the old token"
+say "v1be-bot's token stops working anyway, so this leaves nothing to fall back on."
+rm -f "$HOME/.config/gh/hosts.yml"
+say "Removed."
 pause
 
 stage "Check the identity"
 FAILED=0
-LOGIN="$(gh api user --jq .login 2>/dev/null || true)"
-if [[ "$LOGIN" == "v1be-bot" ]]; then
-  say "PASS: gh is signed in as v1be-bot"
+WRAPPER=/workspaces/v1be/v1be-infra/.devcontainer/bin/gh
+EXPECTED_REPOS=".github,episode-template,series,v1be-infra"
+LOGIN="$("$WRAPPER" api graphql -f query='{viewer{login}}' --jq .data.viewer.login 2>/dev/null || true)"
+if [[ "$LOGIN" == "${APP_SLUG}[bot]" ]]; then
+  say "PASS: gh works as $LOGIN"
 else
-  warn "FAIL: gh is signed in as '${LOGIN:-nobody}', not v1be-bot"; FAILED=1
+  warn "FAIL: gh is signed in as '${LOGIN:-nobody}', not ${APP_SLUG}[bot]"; FAILED=1
 fi
-if [[ "$(git config user.name)" == "v1be-bot" ]]; then
-  say "PASS: git commits as v1be-bot"
+REPOS="$("$WRAPPER" api installation/repositories --jq '[.repositories[].name] | sort | join(",")' 2>/dev/null || true)"
+if [[ "$REPOS" == "$EXPECTED_REPOS" ]]; then
+  say "PASS: the App reaches exactly the four v1be repos"
 else
-  warn "FAIL: git commits as '$(git config user.name || true)'"; FAILED=1
+  warn "FAIL: the App reaches '${REPOS:-nothing}'"; FAILED=1
 fi
-CREDENTIAL="$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill 2>/dev/null || true)"
-if grep -q '^username=v1be-bot$' <<<"$CREDENTIAL" && grep -q '^password=.' <<<"$CREDENTIAL"; then
-  say "PASS: git gets the bot's login from gh"
+CREDENTIAL="$(printf 'protocol=https\nhost=github.com\n\n' | PATH="$(dirname "$WRAPPER"):$PATH" git credential fill 2>/dev/null || true)"
+if grep -q '^username=x-access-token$' <<<"$CREDENTIAL" && grep -q '^password=.' <<<"$CREDENTIAL"; then
+  say "PASS: git gets the App's login from gh"
 else
-  warn "FAIL: git didn't get the bot's login from gh"; FAILED=1
+  warn "FAIL: git didn't get the App's login from gh"; FAILED=1
 fi
 unset CREDENTIAL
 if (( FAILED )); then
@@ -272,7 +298,7 @@ pause
 
 finish
 say "Tell Claude that all three checks passed."
-note "Don't share the token."
+note "Don't share the key."
 }
 
 run_wizard "$@"; exit

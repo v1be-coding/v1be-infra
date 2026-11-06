@@ -201,7 +201,7 @@ finish() {
 
 run_wizard() {
 
-TOTAL_STAGES=6
+TOTAL_STAGES=4
 
 # The org settings change only in Windows Sandbox (ADR-0012).
 if [[ ! -d /c/code/v1be-infra/sandbox ]]; then
@@ -209,27 +209,15 @@ if [[ ! -d /c/code/v1be-infra/sandbox ]]; then
   exit 1
 fi
 
-banner "GitHub: bot issues access and the Infracost key"
+banner "GitHub: the Infracost key"
 
 stage "Before you start"
-say "This does two things for the template repo:"
-step "Gives v1be-bot's token Issues access, so it can file specs and tickets."
-step "Saves the Infracost key as an organization Actions secret."
+say "This saves the Infracost key as an organization Actions secret."
 note "Run org-apply.sh after this one."
 pause
 
-stage "WINDOWS: add Issues to the bot's token"
-say "In a private window on Windows, signed in as v1be-bot:"
-say "  https://github.com/settings/personal-access-tokens"
-step "Open the token named v1be-dev-container."
-step "Under Repository permissions, set Issues to Read and write."
-warn "Change nothing else. If it asks for a reason, enter: v1be issues access."
-step "Save it. The token's value stays the same, so don't copy anything."
-step "Sign out of v1be-bot, and close the private window."
-pause "Press Enter when it's saved and you've signed out."
-
-stage "SANDBOX: sign in to GitHub"
-step "Sign in with your own GitHub account, the org owner, not v1be-bot."
+stage "Sign in to GitHub"
+step "Sign in with your own GitHub account, the org owner."
 note "This login stays in the Sandbox."
 gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo
 ORG_ROLE="$(gh api user/memberships/orgs/v1be-coding --jq .role 2>/dev/null | tr -d '\r' || true)"
@@ -240,18 +228,7 @@ fi
 say "PASS: signed in as a v1be-coding owner"
 pause
 
-stage "SANDBOX: approve the token change"
-open_url "https://github.com/organizations/v1be-coding/settings/personal-access-token-requests"
-step "If a request from v1be-bot is listed, open it."
-step "Check it lists only Contents, Issues, Pull requests and Metadata."
-if ! confirm "Does it list only those, or is there no request?"; then
-  warn "Stopping. Don't approve it. Tell Claude what else it lists."
-  exit 1
-fi
-step "Approve it, if there's a request."
-pause "Press Enter when that's done."
-
-stage "SANDBOX: get the Infracost key"
+stage "Get the Infracost key"
 open_url "https://dashboard.infracost.io"
 step "Sign up or sign in. It's a free account, and it isn't linked to AWS."
 step "Find your API key in the organization settings, and copy it."
@@ -279,7 +256,6 @@ pause
 
 finish
 say "Next, run org-apply.sh, then tell Claude this passed."
-note "Claude will check the bot can reach issues."
 }
 
 run_wizard "$@"; exit
