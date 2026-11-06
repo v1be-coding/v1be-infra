@@ -46,6 +46,9 @@ resource "github_repository" "this" {
   # Branch rules need a main branch to exist.
   auto_init = true
 
+  # Runs land through auto-merge, so only the required check decides (ADR-0013).
+  allow_auto_merge = each.key == "episode-template"
+
   has_issues   = true
   has_wiki     = false
   has_projects = false
@@ -137,4 +140,43 @@ resource "github_repository_environment_deployment_policy" "infra_main" {
   repository     = github_repository.this["v1be-infra"].name
   environment    = github_repository_environment.infra[each.key].environment
   branch_pattern = "main"
+}
+
+# The template's rules. Episode repos will get the same ones (ADR-0013).
+resource "github_branch_protection_v3" "template_main" {
+  repository     = github_repository.this["episode-template"].name
+  branch         = "main"
+  enforce_admins = true
+
+  required_status_checks {
+    strict = false
+    checks = ["green:${local.github_actions_app_id}"]
+  }
+
+  # No approvals in general. Code owner review guards the frozen tests.
+  required_pull_request_reviews {
+    required_approving_review_count = 0
+    require_code_owner_reviews      = true
+  }
+}
+
+# PR branches reach these, so they have no branch policy.
+resource "github_repository_environment" "template" {
+  for_each = toset(["checklist", "cost"])
+
+  repository          = github_repository.this["episode-template"].name
+  environment         = each.key
+  can_admins_bypass   = false
+  prevent_self_review = false
+
+  reviewers {
+    users = [data.github_user.repo_owner.id]
+  }
+}
+
+resource "github_issue_label" "failed_attempt" {
+  repository  = github_repository.this["episode-template"].name
+  name        = "failed-attempt"
+  color       = "b60205"
+  description = "An attempt that failed and went back to the spec."
 }
