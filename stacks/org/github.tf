@@ -180,3 +180,24 @@ resource "github_issue_label" "failed_attempt" {
   color       = "b60205"
   description = "An attempt that failed and went back to the spec."
 }
+
+# Episode CI builds role ARNs from these, so IDs stay masked in public logs.
+resource "github_actions_organization_secret" "account_id" {
+  for_each = local.member_accounts
+
+  secret_name     = "${upper(each.key)}_ACCOUNT_ID"
+  visibility      = "all"
+  plaintext_value = aws_organizations_account.member[each.key].id
+}
+
+# How the template knows which episode it's deploying. Phase F's repos get the same.
+resource "github_actions_variable" "template" {
+  for_each = {
+    EPISODE = "smoke-test"
+    ACCOUNT = "portfolio"
+  }
+
+  repository    = github_repository.this["episode-template"].name
+  variable_name = each.key
+  value         = each.value
+}
