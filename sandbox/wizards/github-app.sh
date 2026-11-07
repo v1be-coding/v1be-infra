@@ -226,9 +226,14 @@ fi
 step "Create an entry named v1be-agent. It'll hold the IDs and the private key."
 
 stage "Sign in to GitHub"
-step "Sign in with your own GitHub account, the org owner."
-note "This login stays in the Sandbox."
-gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo
+GH_SCOPES="$(gh auth status 2>&1 | tr -d '\r' | grep 'Token scopes' || true)"
+if [[ "$GH_SCOPES" == *"'admin:org'"* && "$GH_SCOPES" == *"'repo'"* ]]; then
+  say "Already signed in to GitHub."
+else
+  step "Sign in with your own GitHub account, the org owner."
+  note "This login stays in the Sandbox."
+  gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo
+fi
 ORG_ROLE="$(gh api "user/memberships/orgs/$ORG" --jq .role 2>/dev/null | tr -d '\r' || true)"
 if [[ "$ORG_ROLE" != "admin" ]]; then
   warn "Stopping: this GitHub login isn't a $ORG owner."

@@ -243,8 +243,12 @@ if ! aws configure get sso_session --profile "$AWS_PROFILE" >/dev/null 2>&1 \
   warn "Stopping: this Sandbox has no $AWS_PROFILE profile. Run identity-center.sh, then come back."
   exit 1
 fi
-step "A browser opens. Sign in and allow the request."
-aws sso login --profile "$AWS_PROFILE"
+if aws sts get-caller-identity --profile "$AWS_PROFILE" >/dev/null 2>&1; then
+  say "Already signed in to AWS."
+else
+  step "A browser opens. Sign in and allow the request."
+  aws sso login --profile "$AWS_PROFILE"
+fi
 CALLER_ACCOUNT="$(aws sts get-caller-identity --query Account --output text | tr -d '\r')"
 MANAGEMENT_ACCOUNT="$(aws organizations describe-organization --query Organization.MasterAccountId --output text | tr -d '\r')"
 if [[ -z "$CALLER_ACCOUNT" || "$CALLER_ACCOUNT" != "$MANAGEMENT_ACCOUNT" ]]; then
