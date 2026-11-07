@@ -1,116 +1,158 @@
-# .github/workflows/deploy.yml
-# The user commits this file, because v1be-bot can't write workflows (ADR-0012).
-# This is the only workflow that may name an environment. This repo's logs are
-# public, and plan files are never uploaded.
+# The user commits this, because the agent's App can't write workflows.
+# Slice 5: main deploys production. A ready PR from this repo gets a cost
+# estimate, waits for approval if it adds over $1 a month, then gets a branch
+# environment. Closing the PR destroys it. Slice 6 adds the required chain.
 name: deploy
 
 on:
   push:
     branches: [main]
-    paths:
-      - stacks/edge/**
-      - stacks/episodes.tfvars
-      - modules/edge-account/**
-  workflow_dispatch: # A plan on demand. The environments still accept main alone.
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, closed]
 
 permissions: {} # nothing unless a job asks
 
-# A newer run replaces one waiting for approval, and never interrupts a running one.
-concurrency:
-  group: deploy
-  cancel-in-progress: false
-
-env:
-  AWS_PROFILE: portfolio # The backend signs in here. The café has its own provider.
-  STACK: stacks/edge
-  TERRAFORM_VERSION: 1.17.1
-  TERRAFORM_SHA256: 4638628058e71a55212b1c563712eac03b902128f40740f3dc8174df12135061
-  TF_IN_AUTOMATION: "true"
-  TF_INPUT: "false"
-
 jobs:
-  plan:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    environment: plan
+  production:
+    if: github.event_name == 'push'
+    concurrency:
+      group: production
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
+    uses: ./.github/workflows/deploy-target.yml
+    with:
+      environment: production
+      account: ${{ vars.ACCOUNT }}
+    secrets: inherit
+
+  # ADR-0007's estimate (Q58). It reads the Terraform files only, with no plan and
+  # no AWS login, and only its Infracost steps get the key (Q4).
+  cost:
+    if: >-
+      github.event_name == 'pull_request' && github.event.action != 'closed' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
     outputs:
-      changes: ${{ steps.plan.outputs.changes }}
+      needs_approval: ${{ steps.decide.outputs.needs_approval }}
+    env:
+      INFRACOST_VERSION: 0.10.47
+      INFRACOST_SHA256: df098d5565b78cc23de57e1dac9f2a02491691322cbd690dca9b197e3e02fe93
+      INFRACOST_NO_COLOR: "true"
+      INFRACOST_SKIP_UPDATE_CHECK: "true"
+      # Placeholders, so no real ID reaches the parser or the public log.
+      VARS: >-
+        --terraform-var account_id=000000000000
+        --terraform-var episode=${{ vars.EPISODE }}
+        --terraform-var account=${{ vars.ACCOUNT }}
+        --terraform-var environment=production
     steps:
-      - &checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2 # The checker comes from the commit before this one.
+          path: pr
           persist-credentials: false
-      - &check-text
-        name: Check the change as text, before Terraform reads it
-        run: |
-          mkdir "$RUNNER_TEMP/base"
-          git archive HEAD^ ci | tar -x -C "$RUNNER_TEMP/base"
-          git diff --name-only --diff-filter=ACMRT HEAD^ HEAD > "$RUNNER_TEMP/changed.txt"
-          bash "$RUNNER_TEMP/base/ci/check-pr-text.sh" "$PWD" "$RUNNER_TEMP/changed.txt"
-      - &install
-        name: Install Terraform at a fixed version
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: base
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - name: Install Infracost at a fixed version
         working-directory: ${{ runner.temp }}
         run: |
-          curl -fsSLo terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
-          echo "$TERRAFORM_SHA256  terraform.zip" | sha256sum -c -
-          unzip -q terraform.zip terraform
+          curl -fsSLo infracost.tar.gz "https://github.com/infracost/infracost/releases/download/v${INFRACOST_VERSION}/infracost-linux-amd64.tar.gz"
+          echo "$INFRACOST_SHA256  infracost.tar.gz" | sha256sum -c -
+          tar -xzf infracost.tar.gz infracost-linux-amd64
+          mv infracost-linux-amd64 infracost
           echo "$PWD" >> "$GITHUB_PATH"
-      # AWS exchanges this token for each account's role. The profiles hold no
-      # credentials, so none can reach the logs. The token lasts minutes.
-      - &sign-in
-        name: Point the AWS profiles at this environment's roles
+      # Retries a temporary failure (Q6). If the estimate still can't be made, the
+      # PR waits for approval instead of failing a round.
+      - name: Estimate the monthly change
+        id: estimate
+        continue-on-error: true
         env:
-          PORTFOLIO_ACCOUNT_ID: ${{ secrets.PORTFOLIO_ACCOUNT_ID }}
-          CAFE_ACCOUNT_ID: ${{ secrets.CAFE_ACCOUNT_ID }}
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
         run: |
-          [ -n "$PORTFOLIO_ACCOUNT_ID" ] && [ -n "$CAFE_ACCOUNT_ID" ] || { echo "An account ID secret is missing"; exit 1; }
-          token=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
-          echo "::add-mask::$token"
-          printf %s "$token" > "$RUNNER_TEMP/oidc-token"
-          mkdir -p ~/.aws
-          for profile in "portfolio $PORTFOLIO_ACCOUNT_ID" "cafe $CAFE_ACCOUNT_ID"; do
-            set -- $profile
-            printf '[profile %s]\nrole_arn = arn:aws:iam::%s:role/v1be-infra-%s\nweb_identity_token_file = %s\n\n' \
-              "$1" "$2" "$GITHUB_JOB" "$RUNNER_TEMP/oidc-token"
-          done > ~/.aws/config
-      - &init
-        name: terraform init
-        run: terraform -chdir="$STACK" init -lockfile=readonly
-      - name: terraform plan
-        id: plan
-        env: &terraform-env
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TF_VAR_portfolio_account_id: ${{ secrets.PORTFOLIO_ACCOUNT_ID }}
-          TF_VAR_cafe_account_id: ${{ secrets.CAFE_ACCOUNT_ID }}
+          for attempt in 1 2 3; do
+            # shellcheck disable=SC2086
+            if infracost breakdown --path base/infra $VARS --format json --out-file base.json \
+              && infracost diff --path pr/infra $VARS --compare-to base.json --format json --out-file diff.json; then
+              exit 0
+            fi
+            sleep $((attempt * 15))
+          done
+          exit 1
+      - name: Decide whether it needs approval
+        id: decide
+        env:
+          ESTIMATED: ${{ steps.estimate.outcome }}
         run: |
-          code=0
-          terraform -chdir="$STACK" plan -no-color -detailed-exitcode -lock-timeout=2m -var-file=../episodes.tfvars || code=$?
-          case "$code" in
-            0) echo "changes=false" >> "$GITHUB_OUTPUT" ;;
-            2) echo "changes=true" >> "$GITHUB_OUTPUT" ;;
-            *) exit "$code" ;;
-          esac
+          if [ "$ESTIMATED" != success ]; then
+            echo "needs_approval=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Infracost couldn't estimate this PR, so it waits for approval."
+            echo "Infracost couldn't estimate this PR, so it waits for approval." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          change=$(jq -r '.diffTotalMonthlyCost // "0"' diff.json)
+          infracost output --path diff.json --format github-comment --show-skipped >> "$GITHUB_STEP_SUMMARY"
+          if awk -v c="$change" 'BEGIN { exit !(c > 1) }'; then
+            echo "needs_approval=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Adds \$${change} a month, over the \$1 limit, so it waits for approval."
+          else
+            echo "needs_approval=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Adds \$${change} a month, within the \$1 limit."
+          fi
 
-  apply:
-    needs: plan
-    if: needs.plan.outputs.changes == 'true'
+  # Only this job names the environment. On the deploy job it would change the
+  # token's sub, which the CI role refuses (Q58).
+  cost-approval:
+    needs: cost
+    if: needs.cost.outputs.needs_approval == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    environment: apply # Waits here for the user's approval.
+    environment: cost
+    permissions: {}
+    steps:
+      - run: echo "Approved, so the branch environment can deploy."
+
+  # Branch environments live in portfolio, whatever the episode's account (ADR-0011).
+  # Draft pushes don't deploy, and PRs from other repos are refused (Q5). It runs
+  # when the approval job is skipped, and never after a rejected or failed one.
+  branch:
+    needs: [cost, cost-approval]
+    if: >-
+      always() && needs.cost.result == 'success' &&
+      (needs.cost-approval.result == 'success' || needs.cost-approval.result == 'skipped') &&
+      github.event_name == 'pull_request' && github.event.action != 'closed' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    concurrency:
+      group: pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
-    steps:
-      - *checkout
-      - *check-text
-      - *install
-      - *sign-in
-      - *init
-      - name: terraform apply
-        env: *terraform-env
-        run: terraform -chdir="$STACK" apply -no-color -auto-approve -lock-timeout=2m -var-file=../episodes.tfvars
+    uses: ./.github/workflows/deploy-target.yml
+    with:
+      environment: pr-${{ github.event.pull_request.number }}
+      account: portfolio
+    secrets: inherit
+
+  # Waits for a running deploy, through the same concurrency group.
+  teardown:
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    concurrency:
+      group: pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/teardown-target.yml
+    with:
+      environment: pr-${{ github.event.pull_request.number }}
+    secrets: inherit
