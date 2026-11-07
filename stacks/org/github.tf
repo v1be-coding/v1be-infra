@@ -185,8 +185,9 @@ resource "github_actions_organization_secret" "account_id" {
 # How the template knows which episode it's deploying. Phase F's repos get the same.
 resource "github_actions_variable" "template" {
   for_each = {
-    EPISODE = "smoke-test"
-    ACCOUNT = "portfolio"
+    EPISODE  = "smoke-test"
+    ACCOUNT  = "portfolio"
+    SITE_URL = "https://smoke-test.emilianocasijr.com"
   }
 
   repository    = github_repository.this["episode-template"].name
