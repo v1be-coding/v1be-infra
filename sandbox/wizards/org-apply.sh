@@ -229,8 +229,12 @@ if ! aws configure get sso_session --profile "$AWS_PROFILE" >/dev/null 2>&1 \
   warn "Stopping: this Sandbox has no $AWS_PROFILE profile. Run identity-center.sh, then come back."
   exit 1
 fi
-step "A browser opens. Sign in and allow the request."
-aws sso login --profile "$AWS_PROFILE"
+if aws sts get-caller-identity --profile "$AWS_PROFILE" >/dev/null 2>&1; then
+  say "Already signed in to AWS."
+else
+  step "A browser opens. Sign in and allow the request."
+  aws sso login --profile "$AWS_PROFILE"
+fi
 CALLER_ACCOUNT="$(aws sts get-caller-identity --query Account --output text | tr -d '\r')"
 MANAGEMENT_ACCOUNT="$(aws organizations describe-organization --query Organization.MasterAccountId --output text | tr -d '\r')"
 if [[ -z "$CALLER_ACCOUNT" || "$CALLER_ACCOUNT" != "$MANAGEMENT_ACCOUNT" ]]; then
@@ -241,9 +245,14 @@ say "PASS: signed in to the management account"
 pause
 
 stage "Sign in to GitHub"
-step "Sign in with your own GitHub account, the org owner."
-note "This login stays in the Sandbox, and Terraform gets it for this run only."
-gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo
+GH_SCOPES="$(gh auth status 2>&1 | tr -d '\r' | grep 'Token scopes' || true)"
+if [[ "$GH_SCOPES" == *"'admin:org'"* && "$GH_SCOPES" == *"'repo'"* ]]; then
+  say "Already signed in to GitHub."
+else
+  step "Sign in with your own GitHub account, the org owner."
+  note "This login stays in the Sandbox, and Terraform gets it for this run only."
+  gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo
+fi
 GITHUB_TOKEN="$(gh auth token | tr -d '\r')"
 export GITHUB_TOKEN
 ORG_ROLE="$(gh api user/memberships/orgs/v1be-coding --jq .role 2>/dev/null | tr -d '\r' || true)"

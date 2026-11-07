@@ -250,16 +250,25 @@ note "an environment. The last stages remove it."
 pause
 
 stage "Sign in to AWS and GitHub"
-step "A browser opens. Sign in as v1be-admin and allow the request."
-aws sso login --profile "$AWS_PROFILE"
+if aws sts get-caller-identity --profile "$AWS_PROFILE" >/dev/null 2>&1; then
+  say "Already signed in to AWS."
+else
+  step "A browser opens. Sign in as v1be-admin and allow the request."
+  aws sso login --profile "$AWS_PROFILE"
+fi
 PORTFOLIO_ID="$(aws organizations list-accounts --query "Accounts[?Name=='portfolio'].Id | [0]" --output text | tr -d '\r')"
 CAFE_ID="$(aws organizations list-accounts --query "Accounts[?Name=='collective-cafe-prod'].Id | [0]" --output text | tr -d '\r')"
 if [[ ! "$PORTFOLIO_ID" =~ ^[0-9]{12}$ || ! "$CAFE_ID" =~ ^[0-9]{12}$ ]]; then
   warn "Stopping: couldn't find both member accounts."
   exit 1
 fi
-step "Sign in with your own GitHub account, the org owner."
-gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo,workflow
+GH_SCOPES="$(gh auth status 2>&1 | tr -d '\r' | grep 'Token scopes' || true)"
+if [[ "$GH_SCOPES" == *"'admin:org'"* && "$GH_SCOPES" == *"'repo'"* && "$GH_SCOPES" == *"'workflow'"* ]]; then
+  say "Already signed in to GitHub."
+else
+  step "Sign in with your own GitHub account, the org owner."
+  gh auth login --hostname github.com --git-protocol https --web --scopes admin:org,repo,workflow
+fi
 ORG_ROLE="$(gh api user/memberships/orgs/v1be-coding --jq .role 2>/dev/null | tr -d '\r' || true)"
 if [[ "$ORG_ROLE" != "admin" ]]; then
   warn "Stopping: this GitHub login isn't a v1be-coding owner."
