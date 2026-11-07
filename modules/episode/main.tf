@@ -14,6 +14,7 @@ locals {
   apis          = "arn:aws:apigateway:ap-southeast-1::/apis"
   site_bucket   = "${local.prefix}-site-${var.account}"
   api_name      = "${local.prefix}-api"
+  clusters      = "arn:aws:dsql:ap-southeast-1:${var.account_id}:cluster/*"
 
   # Portfolio: branch environments through a PR, and main for production and
   # schedules. Café: only GitHub's approved production environment (ADR-0005).
@@ -69,6 +70,20 @@ data "aws_iam_policy_document" "boundary" {
       "ssm:GetParametersByPath",
     ]
     resources = [local.ssm_path]
+  }
+
+  # The Lambda's database role. dsql:DbConnectAdmin stays out, so no role CI
+  # makes can hold admin rights on a cluster (ADR-0003).
+  statement {
+    sid       = "ConnectToOwnClusters"
+    actions   = ["dsql:DbConnect"]
+    resources = [local.clusters]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/episode"
+      values   = [var.name]
+    }
   }
 }
 
@@ -180,6 +195,56 @@ data "aws_iam_policy_document" "ci" {
       "apigateway:UntagResource",
     ]
     resources = ["${local.apis}/*", "arn:aws:apigateway:ap-southeast-1::/tags/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/episode"
+      values   = [var.name]
+    }
+  }
+
+  # AWS makes this role when an account's first cluster is created, and the
+  # caller needs the right to trigger it.
+  statement {
+    sid       = "AllowDsqlServiceRole"
+    actions   = ["iam:CreateServiceLinkedRole"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:AWSServiceName"
+      values   = ["dsql.amazonaws.com"]
+    }
+  }
+
+  # A new cluster must carry the episode's tag, because cluster IDs can't be
+  # named ahead.
+  statement {
+    sid       = "CreateTaggedClusters"
+    actions   = ["dsql:CreateCluster", "dsql:TagResource"]
+    resources = [local.clusters]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/episode"
+      values   = [var.name]
+    }
+  }
+
+  # dsql:UpdateCluster is left out on purpose. It's the only way to turn off
+  # deletion protection, so a run can't delete a production cluster.
+  statement {
+    sid = "ManageOwnClusters"
+    actions = [
+      "dsql:DbConnectAdmin",
+      "dsql:DeleteCluster",
+      "dsql:GetCluster",
+      "dsql:GetVpcEndpointServiceName",
+      "dsql:ListTagsForResource",
+      "dsql:TagResource",
+      "dsql:UntagResource",
+    ]
+    resources = [local.clusters]
 
     condition {
       test     = "StringEquals"
