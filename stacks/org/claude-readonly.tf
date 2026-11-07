@@ -46,6 +46,19 @@ data "aws_iam_policy_document" "claude_readonly" {
     ]
   }
 
+  # Settings ViewOnlyAccess leaves out. None of them returns a secret value.
+  statement {
+    sid = "ReadSettingsAndAlarms"
+    actions = [
+      "cloudwatch:DescribeAlarmHistory",
+      "cloudwatch:DescribeAlarms",
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "lambda:GetAccountSettings",
+    ]
+    resources = ["*"]
+  }
+
   statement {
     sid    = "DenySecretValues"
     effect = "Deny"

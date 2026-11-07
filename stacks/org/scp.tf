@@ -4,6 +4,7 @@
 
 locals {
   sso_role_arn     = "arn:aws:iam::*:role/aws-reserved/sso.amazonaws.com/*"
+  sso_admin_arn    = "arn:aws:iam::*:role/aws-reserved/sso.amazonaws.com/*AWSReservedSSO_AdministratorAccess_*"
   infra_ci_roles   = "arn:aws:iam::*:role/v1be-infra-*"
   third_party_arns = "arn:aws:ssm:*:*:parameter/*/third-party/*"
 
@@ -27,6 +28,7 @@ locals {
     "lambda",
     "logs",
     "s3",
+    "servicequotas",
     "sns",
     "ssm",
     "sts",
@@ -50,6 +52,22 @@ data "aws_iam_policy_document" "allowed_services" {
     effect      = "Deny"
     not_actions = [for service in each.value : "${service}:*"]
     resources   = ["*"]
+  }
+
+  # Only the owner's admin login may raise a quota, because a higher quota raises
+  # the ceiling on spending (ADR-0007). CI roles get no such right in their own
+  # policies either, so this is a second layer.
+  statement {
+    sid       = "AdminOnlyServices"
+    effect    = "Deny"
+    actions   = ["servicequotas:*"]
+    resources = ["*"]
+
+    condition {
+      test     = "ArnNotLike"
+      variable = "aws:PrincipalArn"
+      values   = [local.sso_admin_arn]
+    }
   }
 
   # Everything stays in Singapore. These exemptions follow AWS's sample Region SCP,
