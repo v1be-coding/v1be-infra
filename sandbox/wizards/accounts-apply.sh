@@ -293,7 +293,7 @@ terraform init -input=false -lockfile=readonly -backend-config="key=accounts/$AC
 pause
 
 stage "Set the run's values"
-step "Enter your plain Gmail address, with no + tag. Cost alerts go there."
+step "Enter your plain Gmail address, with no + tag. Cost alerts and episode alarms go there."
 ask ROOT_EMAIL "Mailbox"
 export TF_VAR_root_email="$ROOT_EMAIL"
 export TF_VAR_account="$ACCOUNT"
@@ -350,6 +350,41 @@ else
     exit 1
   fi
   terraform apply -input=false tfplan
+fi
+pause
+
+stage "Confirm the alarm email"
+TOPIC_ARN="arn:aws:sns:ap-southeast-1:$ACCOUNT_ID:v1be-alerts"
+PENDING="$(aws sns list-subscriptions-by-topic --topic-arn "$TOPIC_ARN" --profile "$MEMBER_PROFILE" \
+  --query "length(Subscriptions[?SubscriptionArn=='PendingConfirmation'])" --output text | tr -d '\r')"
+if [[ "$PENDING" == "0" ]]; then
+  say "PASS: the alarm email is already confirmed"
+else
+  say "AWS has emailed $ROOT_EMAIL, subject \"AWS Notification - Subscription Confirmation\"."
+  warn "Don't click its link. Clicking would let anyone you forward an alarm to unsubscribe you."
+  step "In Gmail, right-click \"Confirm subscription\" and copy the link address."
+  step "Paste it below with a right-click."
+  CONFIRMED=0
+  for _ in 1 2 3; do
+    ask CONFIRM_URL "Link" || break
+    TOKEN="$(printf '%s' "$CONFIRM_URL" | sed -n 's/.*[?&]Token=\([^&]*\).*/\1/p')"
+    if [[ -z "$TOKEN" ]]; then
+      warn "That link has no Token. Copy the whole link and try again."
+      continue
+    fi
+    if aws sns confirm-subscription --topic-arn "$TOPIC_ARN" --token "$TOKEN" \
+      --authenticate-on-unsubscribe true --profile "$MEMBER_PROFILE" >/dev/null; then
+      CONFIRMED=1
+      break
+    fi
+    warn "AWS refused that link. Check it's the newest email for $ACCOUNT_NAME, and try again."
+  done
+  unset CONFIRM_URL TOKEN
+  if (( ! CONFIRMED )); then
+    warn "FAIL: the alarm email isn't confirmed. Run this wizard again to retry."
+    exit 1
+  fi
+  say "PASS: the alarm email is confirmed, and only a signed-in admin can unsubscribe it"
 fi
 pause
 
