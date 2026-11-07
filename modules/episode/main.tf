@@ -16,6 +16,11 @@ locals {
   site_bucket        = "${local.site_bucket_prefix}-${var.account}"
   api_name           = "${local.prefix}-api"
   clusters           = "arn:aws:dsql:ap-southeast-1:${var.account_id}:cluster/*"
+  tables             = "arn:aws:dynamodb:ap-southeast-1:${var.account_id}:table/${local.prefix}-*"
+  alarms             = "arn:aws:cloudwatch:ap-southeast-1:${var.account_id}:alarm:${local.prefix}-*"
+
+  # The accounts stack owns this topic, and it emails the owner (Q61).
+  alerts_topic = "arn:aws:sns:ap-southeast-1:${var.account_id}:v1be-alerts"
 
   # Portfolio: branch environments through a PR, and main for production and
   # schedules. Café: only GitHub's approved production environment (ADR-0005).
@@ -85,6 +90,18 @@ data "aws_iam_policy_document" "boundary" {
       variable = "aws:ResourceTag/episode"
       values   = [var.name]
     }
+  }
+
+  # The rate-limit and spend-cap counters (Q56). Items only, never the table.
+  statement {
+    sid = "CountInOwnTables"
+    actions = [
+      "dynamodb:DeleteItem",
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    ]
+    resources = [local.tables]
   }
 }
 
@@ -165,6 +182,57 @@ data "aws_iam_policy_document" "ci" {
   statement {
     sid       = "ListLogGroups"
     actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+
+  # Each target's counter table (Q56). The names keep CI off other episodes'.
+  statement {
+    sid       = "ManageOwnTables"
+    actions   = ["dynamodb:*"]
+    resources = [local.tables]
+  }
+
+  statement {
+    sid       = "ListTables"
+    actions   = ["dynamodb:ListTables"]
+    resources = ["*"]
+  }
+
+  # Production's alarms (Q61). Their actions may only email through the
+  # accounts stack's topic. The Null check stops an alarm with no actions slipping
+  # past ForAllValues, which is true for an empty list.
+  statement {
+    sid       = "CreateAlarmsThatEmail"
+    actions   = ["cloudwatch:PutMetricAlarm"]
+    resources = [local.alarms]
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "cloudwatch:AlarmActions"
+      values   = [local.alerts_topic]
+    }
+
+    condition {
+      test     = "Null"
+      variable = "cloudwatch:AlarmActions"
+      values   = ["false"]
+    }
+  }
+
+  statement {
+    sid = "TidyOwnAlarms"
+    actions = [
+      "cloudwatch:DeleteAlarms",
+      "cloudwatch:ListTagsForResource",
+      "cloudwatch:TagResource",
+      "cloudwatch:UntagResource",
+    ]
+    resources = [local.alarms]
+  }
+
+  statement {
+    sid       = "ReadAlarms"
+    actions   = ["cloudwatch:DescribeAlarms"]
     resources = ["*"]
   }
 

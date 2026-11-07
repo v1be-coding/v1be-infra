@@ -2,6 +2,22 @@
 # header check and read the origin secret (ADR-0010). A run deploys into the
 # bucket and the API, and can't change the distribution.
 
+# Closes the API's raw execute-api address (Q55). CloudFront sends this on every
+# API request, and the Lambda refuses any request without it, so a caller can't
+# skip CloudFront or forge CF-Connecting-IP. It guards against outsiders only:
+# anything that can read the distribution can read it. The template reads it
+# from SSM, so it stays marked sensitive and out of the public logs.
+resource "random_password" "api_origin" {
+  length  = 48
+  special = false
+}
+
+resource "aws_ssm_parameter" "api_origin" {
+  name  = "/${var.name}/internal/api-origin"
+  type  = "SecureString"
+  value = random_password.api_origin.result
+}
+
 data "aws_cloudfront_function" "origin_check" {
   name  = "v1be-origin-check"
   stage = "LIVE"
@@ -113,6 +129,12 @@ resource "aws_cloudfront_distribution" "site" {
   origin {
     origin_id   = "api"
     domain_name = replace(aws_apigatewayv2_api.api.api_endpoint, "https://", "")
+
+    # CloudFront replaces any value a caller sends with this one.
+    custom_header {
+      name  = "x-v1be-api-origin"
+      value = random_password.api_origin.result
+    }
 
     custom_origin_config {
       http_port              = 80

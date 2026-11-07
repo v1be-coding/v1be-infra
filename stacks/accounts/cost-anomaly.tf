@@ -6,7 +6,8 @@ resource "aws_ce_anomaly_monitor" "services" {
   monitor_dimension = "SERVICE"
 }
 
-# Daily, because instant alerts need SNS, which isn't on the allowlist.
+# Daily, to keep the inbox quiet. Instant alerts would go through the topic in
+# alerts.tf.
 resource "aws_ce_anomaly_subscription" "email" {
   name             = "v1be-${var.account}-daily"
   frequency        = "DAILY"
