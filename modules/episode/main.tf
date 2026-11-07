@@ -2,19 +2,20 @@
 # Later template slices add the services they need here.
 
 locals {
-  prefix        = "v1be-${var.name}"
-  ci_role_name  = "${local.prefix}-ci"
-  boundary_name = "${local.prefix}-boundary"
-  boundary_arn  = "arn:aws:iam::${var.account_id}:policy/${local.boundary_name}"
-  state_bucket  = "arn:aws:s3:::v1be-${var.account}-state"
-  role_arns     = "arn:aws:iam::${var.account_id}:role/${local.prefix}-*"
-  ssm_path      = "arn:aws:ssm:ap-southeast-1:${var.account_id}:parameter/${var.name}/*"
-  functions     = "arn:aws:lambda:ap-southeast-1:${var.account_id}:function:${local.prefix}-*"
-  log_groups    = "arn:aws:logs:ap-southeast-1:${var.account_id}:log-group:/aws/lambda/${local.prefix}-*"
-  apis          = "arn:aws:apigateway:ap-southeast-1::/apis"
-  site_bucket   = "${local.prefix}-site-${var.account}"
-  api_name      = "${local.prefix}-api"
-  clusters      = "arn:aws:dsql:ap-southeast-1:${var.account_id}:cluster/*"
+  prefix             = "v1be-${var.name}"
+  ci_role_name       = "${local.prefix}-ci"
+  boundary_name      = "${local.prefix}-boundary"
+  boundary_arn       = "arn:aws:iam::${var.account_id}:policy/${local.boundary_name}"
+  state_bucket       = "arn:aws:s3:::v1be-${var.account}-state"
+  role_arns          = "arn:aws:iam::${var.account_id}:role/${local.prefix}-*"
+  ssm_path           = "arn:aws:ssm:ap-southeast-1:${var.account_id}:parameter/${var.name}/*"
+  functions          = "arn:aws:lambda:ap-southeast-1:${var.account_id}:function:${local.prefix}-*"
+  log_groups         = "arn:aws:logs:ap-southeast-1:${var.account_id}:log-group:/aws/lambda/${local.prefix}-*"
+  apis               = "arn:aws:apigateway:ap-southeast-1::/apis"
+  site_bucket_prefix = "${local.prefix}-site"
+  site_bucket        = "${local.site_bucket_prefix}-${var.account}"
+  api_name           = "${local.prefix}-api"
+  clusters           = "arn:aws:dsql:ap-southeast-1:${var.account_id}:cluster/*"
 
   # Portfolio: branch environments through a PR, and main for production and
   # schedules. Café: only GitHub's approved production environment (ADR-0005).
@@ -94,6 +95,8 @@ resource "aws_iam_policy" "boundary" {
 }
 
 data "aws_iam_policy_document" "ci" {
+  source_policy_documents = data.aws_iam_policy_document.branch[*].json
+
   statement {
     sid       = "ListOwnState"
     actions   = ["s3:ListBucket"]
@@ -166,10 +169,12 @@ data "aws_iam_policy_document" "ci" {
   }
 
   # A new API must carry the episode's tag, because API IDs can't be named ahead.
+  # Tags go in the create call. The /tags/* resource has no condition keys, so a
+  # right on it here would let CI re-tag another episode's API (ADR-0011).
   statement {
     sid       = "CreateTaggedApis"
-    actions   = ["apigateway:POST", "apigateway:TagResource"]
-    resources = [local.apis, "arn:aws:apigateway:ap-southeast-1::/tags/*"]
+    actions   = ["apigateway:POST"]
+    resources = [local.apis]
 
     condition {
       test     = "StringEquals"
@@ -227,6 +232,14 @@ data "aws_iam_policy_document" "ci" {
     condition {
       test     = "StringEquals"
       variable = "aws:RequestTag/episode"
+      values   = [var.name]
+    }
+
+    # IfExists because a new cluster has no tags yet. Without this, CI could tag
+    # another episode's cluster as its own and take it over.
+    condition {
+      test     = "StringEqualsIfExists"
+      variable = "aws:ResourceTag/episode"
       values   = [var.name]
     }
   }
