@@ -1,16 +1,15 @@
-# .github/workflows/deploy.yml
-# The user commits this file, because v1be-bot can't write workflows (ADR-0012).
-# This is the only workflow that may name an environment. This repo's logs are
+# The user commits this file, because the agent's App can't write workflows (ADR-0012).
+# Only this and deploy.yml may name an environment. This repo's logs are
 # public, and plan files are never uploaded.
-name: deploy
+name: deploy-episodes
 
 on:
   push:
     branches: [main]
     paths:
-      - stacks/edge/**
+      - stacks/episodes/**
       - stacks/episodes.tfvars
-      - modules/edge-account/**
+      - modules/episode/**
   workflow_dispatch: # A plan on demand. The environments still accept main alone.
 
 permissions: {} # nothing unless a job asks
@@ -22,7 +21,7 @@ concurrency:
 
 env:
   AWS_PROFILE: portfolio # The backend signs in here. The café has its own provider.
-  STACK: stacks/edge
+  STACK: stacks/episodes
   TERRAFORM_VERSION: 1.17.1
   TERRAFORM_SHA256: 4638628058e71a55212b1c563712eac03b902128f40740f3dc8174df12135061
   TF_IN_AUTOMATION: "true"
@@ -100,7 +99,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.changes == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30 # A new distribution can take a while.
     environment: apply # Waits here for the user's approval.
     permissions:
       contents: read
