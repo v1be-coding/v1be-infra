@@ -1,4 +1,4 @@
-# The user commits this file, because v1be-bot can't write workflows (ADR-0012).
+# The user commits this file, because the agent's App can't write workflows (ADR-0012).
 # Only this and deploy.yml may name an environment. This repo's logs are
 # public, and plan files are never uploaded.
 name: deploy-episodes
@@ -83,6 +83,7 @@ jobs:
       - name: terraform plan
         id: plan
         env: &terraform-env
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_portfolio_account_id: ${{ secrets.PORTFOLIO_ACCOUNT_ID }}
           TF_VAR_cafe_account_id: ${{ secrets.CAFE_ACCOUNT_ID }}
         run: |
@@ -98,7 +99,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.changes == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30 # A new distribution can take a while.
     environment: apply # Waits here for the user's approval.
     permissions:
       contents: read
