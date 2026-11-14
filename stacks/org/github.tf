@@ -17,6 +17,29 @@ locals {
       is_template = false
     }
   }
+
+  main_zone = "emilianocasijr.com"
+
+  # Each episode's repo, and what its CI is told. smoke-test's repo is the
+  # template itself, so the template is in here too.
+  episode_repos = {
+    for name, episode in var.episodes : coalesce(episode.repo, name) => {
+      EPISODE  = name
+      ACCOUNT  = episode.account
+      SITE_URL = "https://${episode.subdomain}.${coalesce(episode.zone, local.main_zone)}"
+    }
+  }
+
+  # Repos made from the template, one for each episode with its own repo.
+  generated_repos = {
+    for repo, vars in local.episode_repos : repo => {
+      description = "The ${vars.EPISODE} episode of V1be Coding."
+      is_template = false
+    } if repo != "episode-template"
+  }
+
+  # The template and every repo made from it get the same rules (ADR-0013).
+  ruled_repos = setunion(["episode-template"], keys(local.generated_repos))
 }
 
 resource "github_organization_settings" "this" {
@@ -36,18 +59,27 @@ resource "github_organization_settings" "this" {
 }
 
 resource "github_repository" "this" {
-  for_each = local.repositories
+  for_each = merge(local.repositories, local.generated_repos)
 
   name        = each.key
   description = each.value.description
   visibility  = "public"
   is_template = each.value.is_template
 
-  # Branch rules need a main branch to exist.
-  auto_init = true
+  # Branch rules need a main branch. An episode repo gets one from the template.
+  auto_init = !contains(keys(local.generated_repos), each.key)
+
+  dynamic "template" {
+    for_each = contains(keys(local.generated_repos), each.key) ? [1] : []
+
+    content {
+      owner      = "v1be-coding"
+      repository = "episode-template"
+    }
+  }
 
   # Runs land through auto-merge, so only the required check decides (ADR-0013).
-  allow_auto_merge = each.key == "episode-template"
+  allow_auto_merge = contains(local.ruled_repos, each.key)
 
   has_issues   = true
   has_wiki     = false
@@ -134,9 +166,11 @@ resource "github_repository_environment_deployment_policy" "infra_main" {
   branch_pattern = "main"
 }
 
-# The template's rules. Episode repos will get the same ones (ADR-0013).
-resource "github_branch_protection_v3" "template_main" {
-  repository     = github_repository.this["episode-template"].name
+# The template's rules, which every episode repo also gets (ADR-0013).
+resource "github_branch_protection_v3" "episode_main" {
+  for_each = local.ruled_repos
+
+  repository     = github_repository.this[each.key].name
   branch         = "main"
   enforce_admins = true
 
@@ -152,12 +186,19 @@ resource "github_branch_protection_v3" "template_main" {
   }
 }
 
-# PR branches reach these, so they have no branch policy.
-resource "github_repository_environment" "template" {
-  for_each = toset(["checklist", "cost"])
+moved {
+  from = github_branch_protection_v3.template_main
+  to   = github_branch_protection_v3.episode_main["episode-template"]
+}
 
-  repository          = github_repository.this["episode-template"].name
-  environment         = each.key
+# PR branches reach these, so they have no branch policy.
+resource "github_repository_environment" "episode" {
+  for_each = toset([
+    for pair in setproduct(local.ruled_repos, ["checklist", "cost"]) : join("/", pair)
+  ])
+
+  repository          = github_repository.this[split("/", each.key)[0]].name
+  environment         = split("/", each.key)[1]
   can_admins_bypass   = false
   prevent_self_review = false
 
@@ -166,11 +207,28 @@ resource "github_repository_environment" "template" {
   }
 }
 
+moved {
+  from = github_repository_environment.template["checklist"]
+  to   = github_repository_environment.episode["episode-template/checklist"]
+}
+
+moved {
+  from = github_repository_environment.template["cost"]
+  to   = github_repository_environment.episode["episode-template/cost"]
+}
+
 resource "github_issue_label" "failed_attempt" {
-  repository  = github_repository.this["episode-template"].name
+  for_each = local.ruled_repos
+
+  repository  = github_repository.this[each.key].name
   name        = "failed-attempt"
   color       = "b60205"
   description = "An attempt that failed and went back to the spec."
+}
+
+moved {
+  from = github_issue_label.failed_attempt
+  to   = github_issue_label.failed_attempt["episode-template"]
 }
 
 # Episode CI builds role ARNs from these, so IDs stay masked in public logs.
@@ -182,15 +240,30 @@ resource "github_actions_organization_secret" "account_id" {
   plaintext_value = aws_organizations_account.member[each.key].id
 }
 
-# How the template knows which episode it's deploying. Phase F's repos get the same.
-resource "github_actions_variable" "template" {
-  for_each = {
-    EPISODE  = "smoke-test"
-    ACCOUNT  = "portfolio"
-    SITE_URL = "https://smoke-test.emilianocasijr.com"
-  }
+# How each repo knows which episode it's deploying.
+resource "github_actions_variable" "episode" {
+  for_each = merge([
+    for repo, vars in local.episode_repos : {
+      for name, value in vars : "${repo}/${name}" => { repo = repo, name = name, value = value }
+    }
+  ]...)
 
-  repository    = github_repository.this["episode-template"].name
-  variable_name = each.key
-  value         = each.value
+  repository    = github_repository.this[each.value.repo].name
+  variable_name = each.value.name
+  value         = each.value.value
+}
+
+moved {
+  from = github_actions_variable.template["EPISODE"]
+  to   = github_actions_variable.episode["episode-template/EPISODE"]
+}
+
+moved {
+  from = github_actions_variable.template["ACCOUNT"]
+  to   = github_actions_variable.episode["episode-template/ACCOUNT"]
+}
+
+moved {
+  from = github_actions_variable.template["SITE_URL"]
+  to   = github_actions_variable.episode["episode-template/SITE_URL"]
 }
