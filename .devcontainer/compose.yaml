@@ -25,9 +25,12 @@ services:
       - claude-config:/home/dev/.claude-config
       - gh-config:/home/dev/.config/gh
       - aws-config:/home/dev/.aws
+      # Browsers that episode repos download with `npx playwright install`.
+      - playwright-cache:/home/dev/.cache/ms-playwright
 
 volumes:
   episodes:
   claude-config:
   gh-config:
   aws-config:
+  playwright-cache:

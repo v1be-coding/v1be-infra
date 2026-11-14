@@ -53,8 +53,8 @@ WORKDIR /
 RUN rm -rf /tmp/tools
 
 RUN useradd --create-home --uid 1000 --shell /bin/bash dev \
- && mkdir -p /home/dev/.aws /home/dev/.claude-config /home/dev/.config/gh /workspaces/v1be/episodes \
- && chown -R dev:dev /home/dev/.aws /home/dev/.claude-config /home/dev/.config /workspaces/v1be/episodes \
+ && mkdir -p /home/dev/.aws /home/dev/.cache/ms-playwright /home/dev/.claude-config /home/dev/.config/gh /workspaces/v1be/episodes \
+ && chown -R dev:dev /home/dev/.aws /home/dev/.cache /home/dev/.claude-config /home/dev/.config /workspaces/v1be/episodes \
  && git config --system safe.directory /workspaces/v1be/v1be-infra \
  && git config --system user.name 'v1be-agent[bot]' \
  && git config --system user.email '353549221+v1be-agent[bot]@users.noreply.github.com' \
