@@ -26,6 +26,8 @@ resource "aws_budgets_budget" "portfolio" {
 }
 
 data "aws_iam_policy_document" "budgets_action_trust" {
+  provider = aws.portfolio
+
   statement {
     actions = ["sts:AssumeRole"]
 
@@ -52,6 +54,8 @@ resource "aws_iam_role" "budgets_action" {
 
 # Only deny-all, and only on the episodes' CI roles.
 data "aws_iam_policy_document" "budgets_action" {
+  provider = aws.portfolio
+
   statement {
     actions   = ["iam:AttachRolePolicy", "iam:DetachRolePolicy"]
     resources = [for name in local.ci_role_names : "arn:aws:iam::${var.portfolio_account_id}:role/${name}"]
