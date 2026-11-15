@@ -5,11 +5,16 @@
 #
 # Only portfolio has one. Café backups are caught by the org budget's alerts, in
 # the org stack.
+#
+# With no episodes there are no CI roles, and Budgets needs at least one target,
+# so the action and its rights exist only while an episode does. The budget and
+# its role stay either way.
 
 locals {
   budget_limit_usd = "5"
   deny_all_arn     = "arn:aws:iam::aws:policy/AWSDenyAll"
   ci_role_names    = [for target in module.portfolio : target.ci_role_name]
+  has_ci_roles     = length(local.ci_role_names) > 0
 
   # The accounts stack owns this topic, and it emails the owner (Q61).
   alerts_topic_arn = "arn:aws:sns:ap-southeast-1:${var.portfolio_account_id}:v1be-alerts"
@@ -54,6 +59,7 @@ resource "aws_iam_role" "budgets_action" {
 
 # Only deny-all, and only on the episodes' CI roles.
 data "aws_iam_policy_document" "budgets_action" {
+  count    = local.has_ci_roles ? 1 : 0
   provider = aws.portfolio
 
   statement {
@@ -69,14 +75,21 @@ data "aws_iam_policy_document" "budgets_action" {
 }
 
 resource "aws_iam_role_policy" "budgets_action" {
+  count    = local.has_ci_roles ? 1 : 0
   provider = aws.portfolio
 
   name   = "v1be-budgets-action"
   role   = aws_iam_role.budgets_action.id
-  policy = data.aws_iam_policy_document.budgets_action.json
+  policy = data.aws_iam_policy_document.budgets_action[0].json
+}
+
+moved {
+  from = aws_iam_role_policy.budgets_action
+  to   = aws_iam_role_policy.budgets_action[0]
 }
 
 resource "aws_budgets_budget_action" "portfolio" {
+  count    = local.has_ci_roles ? 1 : 0
   provider = aws.portfolio
 
   budget_name        = aws_budgets_budget.portfolio.name
@@ -104,4 +117,9 @@ resource "aws_budgets_budget_action" "portfolio" {
 
   # The role's rights must exist before Budgets checks them.
   depends_on = [aws_iam_role_policy.budgets_action]
+}
+
+moved {
+  from = aws_budgets_budget_action.portfolio
+  to   = aws_budgets_budget_action.portfolio[0]
 }
