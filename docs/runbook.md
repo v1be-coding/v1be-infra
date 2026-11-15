@@ -28,7 +28,14 @@ The dev container's volumes hold the `v1be-agent` App's private key and the `cla
 
 The action attaches a deny-all policy to every portfolio episode's CI role, so deploys stop. Anything already running keeps costing money.
 
-**Never detach the policy by hand.** Budgets wouldn't know, so the action may not fire again that month. Reverse it, then reset it:
+**Never detach the policy by hand.** Budgets wouldn't know, so the action may not fire again that month. Reverse it, then reset it, as the admin login in `portfolio`. The budget is `v1be-portfolio-monthly`, and this finds the action ID:
+
+```bash
+aws budgets describe-budget-actions-for-budget --account-id <id> \
+  --budget-name v1be-portfolio-monthly --query "Actions[].[ActionId,Status]"
+```
+
+Then:
 
 ```bash
 aws budgets execute-budget-action --account-id <id> --budget-name <name> \
