@@ -5,7 +5,7 @@ resource "aws_sns_topic" "alerts" {
   name = "v1be-alerts"
 }
 
-# Only this account's v1be-* alarms can publish here.
+# Only this account's v1be-* alarms, and portfolio's Budgets action, can publish here.
 data "aws_iam_policy_document" "alerts" {
   statement {
     sid       = "EpisodeAlarms"
@@ -27,6 +27,34 @@ data "aws_iam_policy_document" "alerts" {
       test     = "ArnLike"
       variable = "aws:SourceArn"
       values   = ["arn:aws:cloudwatch:ap-southeast-1:${var.account_id}:alarm:v1be-*"]
+    }
+  }
+
+  # The episodes stack's Budgets action reports here when it fires (ADR-0007).
+  dynamic "statement" {
+    for_each = local.is_portfolio ? [1] : []
+
+    content {
+      sid       = "BudgetsAction"
+      actions   = ["sns:Publish"]
+      resources = [aws_sns_topic.alerts.arn]
+
+      principals {
+        type        = "Service"
+        identifiers = ["budgets.amazonaws.com"]
+      }
+
+      condition {
+        test     = "StringEquals"
+        variable = "aws:SourceAccount"
+        values   = [var.account_id]
+      }
+
+      condition {
+        test     = "ArnLike"
+        variable = "aws:SourceArn"
+        values   = ["arn:aws:budgets::${var.account_id}:*"]
+      }
     }
   }
 }
