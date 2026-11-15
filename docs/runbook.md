@@ -26,28 +26,37 @@ The dev container's volumes hold the `v1be-agent` App's private key and the `cla
 
 ## The Budgets action fired
 
-The action attaches a deny-all policy to every portfolio episode's CI role, so deploys stop. Anything already running keeps costing money.
+The action attaches `AWSDenyAll` to every portfolio episode's CI role, so deploys stop, and `v1be-alerts` emails you. Anything already running keeps costing money.
 
-**Never detach the policy by hand.** Budgets wouldn't know, so the action may not fire again that month. Reverse it, then reset it, as the admin login in `portfolio`. The budget is `v1be-portfolio-monthly`, and this finds the action ID:
+It acts fast. In phase F, lowering the limit below the month's spend fired it within minutes, though Budgets only promises to check up to three times a day.
+
+**Never detach the policy by hand.** Budgets wouldn't know, so the action may not fire again that month. As the admin login in `portfolio`, fix the cause, then reverse it. The budget is `v1be-portfolio-monthly`, and this shows the action's ID and status:
 
 ```bash
 aws budgets describe-budget-actions-for-budget --account-id <id> \
   --budget-name v1be-portfolio-monthly --query "Actions[].[ActionId,Status]"
 ```
 
-Then:
+`EXECUTION_SUCCESS` means it's on. Reverse it:
 
 ```bash
-aws budgets execute-budget-action --account-id <id> --budget-name <name> \
+aws budgets execute-budget-action --account-id <id> --budget-name v1be-portfolio-monthly \
   --action-id <id> --execution-type REVERSE_BUDGET_ACTION
+```
 
-aws budgets execute-budget-action --account-id <id> --budget-name <name> \
+Then read the status again:
+
+- **`STANDBY`:** done. It's armed again. Phase F's reverse ended here, with spend back under the limit, and a reset was then refused with `ResourceLockedException ... [ActionStatus: Standby]`.
+- **`REVERSE_SUCCESS`:** reset it, so it's armed for the next overrun. If spend is still over the limit, it may fire again straight away.
+
+```bash
+aws budgets execute-budget-action --account-id <id> --budget-name v1be-portfolio-monthly \
   --action-id <id> --execution-type RESET_BUDGET_ACTION
 ```
 
-Fix the cause first. The policy probably lifts by itself at the start of the next budget period, even if nothing was fixed.
+The policy probably lifts by itself at the start of the next budget period, even if nothing was fixed.
 
-If someone has already detached it, run the same two commands and check the action's status. Phase F tests this path, so update this section with what really happens.
+Untested: what happens if someone has already detached the policy. Read the status, and follow the same steps.
 
 ## Nothing can merge in `v1be-infra`
 
