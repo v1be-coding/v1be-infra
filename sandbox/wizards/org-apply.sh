@@ -266,8 +266,8 @@ pause
 stage "Copy the stack and initialise"
 note "The code folder is read-only here, so Terraform works in $WORK."
 mkdir -p "$WORK"
-rm -f "$WORK"/*.tf "$WORK"/tfplan "$WORK"/plan.txt
-cp "$SOURCE"/*.tf "$SOURCE"/.terraform.lock.hcl "$WORK"/
+rm -f "$WORK"/*.tf "$WORK"/episodes.tfvars "$WORK"/tfplan "$WORK"/plan.txt
+cp "$SOURCE"/*.tf "$SOURCE"/.terraform.lock.hcl "$SOURCE"/../episodes.tfvars "$WORK"/
 cd "$WORK"
 terraform init -input=false -lockfile=readonly
 pause
@@ -300,7 +300,7 @@ fi
 pause
 
 stage "Read the plan"
-if ! terraform plan -input=false -no-color -out=tfplan | tee plan.txt; then
+if ! terraform plan -input=false -no-color -var-file=episodes.tfvars -out=tfplan | tee plan.txt; then
   warn "Stopping: the plan failed. Tell Claude the error, without any account IDs."
   exit 1
 fi
@@ -333,7 +333,7 @@ pause
 
 stage "Last check"
 PLAN_RC=0
-terraform plan -input=false -no-color -detailed-exitcode >second-plan.txt 2>&1 || PLAN_RC=$?
+terraform plan -input=false -no-color -var-file=episodes.tfvars -detailed-exitcode >second-plan.txt 2>&1 || PLAN_RC=$?
 rm -f tfplan plan.txt
 if (( PLAN_RC == 1 )); then
   warn "FAIL: the second plan hit an error. Nothing was changed. It says:"
