@@ -22,6 +22,7 @@ concurrency:
 
 env:
   AWS_PROFILE: portfolio # The backend signs in here. The café has its own provider.
+  LOCK_PATH: edge/terraform.tfstate.tflock # backend.tf's key, plus .tflock
   STACK: stacks/edge
   TERRAFORM_VERSION: 1.17.1
   TERRAFORM_SHA256: 4638628058e71a55212b1c563712eac03b902128f40740f3dc8174df12135061
@@ -89,12 +90,28 @@ jobs:
           TF_VAR_cafe_account_id: ${{ secrets.CAFE_ACCOUNT_ID }}
         run: |
           code=0
-          terraform -chdir="$STACK" plan -no-color -detailed-exitcode -lock-timeout=2m -var-file=../episodes.tfvars || code=$?
+          # timeout sends SIGINT first, so Terraform stops cleanly and releases the state
+          # lock. When GitHub's job timeout killed an apply, the lock stayed and every
+          # later run failed until an admin deleted it (phase F). -k kills it 2 minutes on.
+          timeout -s INT -k 2m 10m terraform -chdir="$STACK" plan -no-color -detailed-exitcode -lock-timeout=2m -var-file=../episodes.tfvars || code=$?
           case "$code" in
             0) echo "changes=false" >> "$GITHUB_OUTPUT" ;;
             2) echo "changes=true" >> "$GITHUB_OUTPUT" ;;
             *) exit "$code" ;;
           esac
+      - name: Name a stale state lock
+        if: failure()
+        run: |
+          lock="$LOCK_KEY"
+          if ! n=$(aws s3api list-objects-v2 --bucket "$LOCK_BUCKET" --prefix "$lock" \
+            --query "length(Contents[?Key=='$lock'] || \`[]\`)" --output text); then
+            echo "::warning::Couldn't check for a stale state lock. If the next run fails with 'Error acquiring the state lock', see the runbook's 'A stale state lock'."
+          elif [ "$n" = 1 ]; then
+            echo "::error::Terraform's state lock is still there: s3://$LOCK_BUCKET/$lock. Every later run will fail on it. Once no run is using this state, an admin deletes it (runbook: 'A stale state lock')."
+          fi
+        env:
+          LOCK_BUCKET: v1be-infra-state
+          LOCK_KEY: ${{ env.LOCK_PATH }}
 
   apply:
     needs: plan
@@ -113,4 +130,17 @@ jobs:
       - *init
       - name: terraform apply
         env: *terraform-env
-        run: terraform -chdir="$STACK" apply -no-color -auto-approve -lock-timeout=2m -var-file=../episodes.tfvars
+        run: timeout -s INT -k 2m 10m terraform -chdir="$STACK" apply -no-color -auto-approve -lock-timeout=2m -var-file=../episodes.tfvars
+      - name: Name a stale state lock
+        if: failure()
+        run: |
+          lock="$LOCK_KEY"
+          if ! n=$(aws s3api list-objects-v2 --bucket "$LOCK_BUCKET" --prefix "$lock" \
+            --query "length(Contents[?Key=='$lock'] || \`[]\`)" --output text); then
+            echo "::warning::Couldn't check for a stale state lock. If the next run fails with 'Error acquiring the state lock', see the runbook's 'A stale state lock'."
+          elif [ "$n" = 1 ]; then
+            echo "::error::Terraform's state lock is still there: s3://$LOCK_BUCKET/$lock. Every later run will fail on it. Once no run is using this state, an admin deletes it (runbook: 'A stale state lock')."
+          fi
+        env:
+          LOCK_BUCKET: v1be-infra-state
+          LOCK_KEY: ${{ env.LOCK_PATH }}
