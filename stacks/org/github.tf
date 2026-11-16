@@ -20,8 +20,8 @@ locals {
 
   main_zone = "emilianocasijr.com"
 
-  # Each episode's repo, and what its CI is told. smoke-test's repo is the
-  # template itself, so the template is in here too.
+  # Each episode's repo, and what its CI is told. An episode whose repo is the
+  # template, as smoke-test was until phase F, puts the template in here too.
   episode_repos = {
     for name, episode in var.episodes : coalesce(episode.repo, name) => {
       EPISODE  = name
