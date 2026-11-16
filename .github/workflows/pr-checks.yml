@@ -64,13 +64,19 @@ jobs:
           curl -fsSLo tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_amd64.zip"
           echo "$TFLINT_SHA256  tflint.zip" | sha256sum -c -
           unzip -q tflint.zip tflint
+      # Each check runs even when an earlier one fails, so one run shows every finding.
       - name: terraform fmt
-        run: ./terraform -chdir=pr fmt -check -recursive || true
+        run: ./terraform -chdir=pr fmt -check -recursive
       - name: terraform validate
+        if: ${{ !cancelled() }}
         run: |
           for stack in pr/stacks/*/; do
             ./terraform -chdir="$stack" init -backend=false -lockfile=readonly -input=false
             ./terraform -chdir="$stack" validate
           done
       - name: tflint
-        run: cd pr && ../tflint --recursive --format compact || true
+        if: ${{ !cancelled() }}
+        run: cd pr && ../tflint --recursive --format compact
+      - name: Every aws block names its provider
+        if: ${{ !cancelled() }}
+        run: bash pr/ci/check-provider-aliases.sh pr/stacks
