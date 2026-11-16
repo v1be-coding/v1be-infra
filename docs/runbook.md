@@ -58,6 +58,25 @@ The policy probably lifts by itself at the start of the next budget period, even
 
 Untested: what happens if someone has already detached the policy. Read the status, and follow the same steps.
 
+Afterwards, look for a stale state lock (below). A deploy that was applying when the action fired couldn't release its lock (phase F).
+
+## A stale state lock
+
+Every Terraform run in CI fails with `Error acquiring the state lock`, or a failed run's `Name a stale state lock` step names one. Terraform keeps the lock as a `.tflock` file next to the state, and a run that was killed or refused mid-apply leaves it behind. Each run has a timeout that stops Terraform cleanly first, so this should be rare. A deny-all or an expired sign-in can still strand one.
+
+1. Make sure no run is using that state: no `deploy`, `deploy-episodes` or `teardown` run in progress for it on GitHub. Deleting a live run's lock lets two runs write the same state.
+2. As the admin login in the account that holds the bucket, list the locks. `v1be-infra-state` and `v1be-portfolio-state` are in `portfolio`, and `v1be-cafe-state` in the café:
+
+   ```bash
+   aws s3 ls s3://v1be-portfolio-state --recursive | grep '\.tflock$'
+   ```
+
+3. Delete the one the error names, then rerun the failed run:
+
+   ```bash
+   aws s3 rm s3://v1be-portfolio-state/<episode>/production/terraform.tfstate.tflock
+   ```
+
 ## Nothing can merge in `v1be-infra`
 
 `main` requires the `risky-text` check, even for the owner. A broken `ci/check-pr-text.sh` or workflow, or a GitHub Actions outage, can stop every PR, including the fix. The check runs `main`'s copy, so a PR can't repair it by itself.
