@@ -46,15 +46,23 @@ data "aws_iam_policy_document" "claude_readonly" {
     ]
   }
 
-  # Settings ViewOnlyAccess leaves out. None of them returns a secret value.
+  # Settings ViewOnlyAccess leaves out. None of them returns a secret value:
+  # DescribeParameters lists names and metadata, and DSQL's are cluster details,
+  # not data.
   statement {
     sid = "ReadSettingsAndAlarms"
     actions = [
+      "budgets:DescribeBudgetAction",
+      "budgets:DescribeBudgetActionsForAccount",
+      "budgets:DescribeBudgetActionsForBudget",
       "cloudwatch:DescribeAlarmHistory",
       "cloudwatch:DescribeAlarms",
+      "dsql:GetCluster",
+      "dsql:ListClusters",
       "iam:GetRole",
       "iam:GetRolePolicy",
       "lambda:GetAccountSettings",
+      "ssm:DescribeParameters",
     ]
     resources = ["*"]
   }
