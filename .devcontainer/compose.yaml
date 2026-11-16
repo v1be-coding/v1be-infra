@@ -28,9 +28,33 @@ services:
       # Browsers that episode repos download with `npx playwright install`.
       - playwright-cache:/home/dev/.cache/ms-playwright
 
+  # Episode sessions (start-claude-episode.cmd) see only the episode repos. No
+  # workspace bind mount, so no parent CLAUDE.md, docs/ or v1be-infra, and their
+  # own Claude config, so no workspace transcripts or prompt history. Phase F's
+  # attempt read docs/handoff.md through the parent CLAUDE.md's pointer.
+  episode:
+    build: .
+    image: v1be-dev
+    working_dir: /workspaces/v1be/episodes
+    command: bash
+    stdin_open: true
+    tty: true
+    shm_size: 1gb
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - episodes:/workspaces/v1be/episodes
+      - claude-config-episodes:/home/dev/.claude-config
+      - gh-config:/home/dev/.config/gh
+      - aws-config:/home/dev/.aws
+      - playwright-cache:/home/dev/.cache/ms-playwright
+
 volumes:
   episodes:
   claude-config:
+  claude-config-episodes:
   gh-config:
   aws-config:
   playwright-cache:
