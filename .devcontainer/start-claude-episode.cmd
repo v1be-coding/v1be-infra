@@ -1,6 +1,8 @@
 @echo off
 rem Starts Claude Code inside the dev container, in one episode's repo, so that
-rem repo's .claude folder loads: its commands, skills and git guardrail.
+rem repo's .claude folder loads: its commands, skills and git guardrail. It uses
+rem the episode service, which mounts only the episode repos and its own Claude
+rem config, so the session can't read the workspace's docs/ or transcripts.
 rem Usage: start-claude-episode.cmd [repo], default episode-template. A Desktop
 rem shortcut to this file opens the template; add the repo name to its target
 rem for an episode.
@@ -23,7 +25,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-docker compose run --rm -w "/workspaces/v1be/episodes/%REPO%" dev claude
+docker compose run --rm -w "/workspaces/v1be/episodes/%REPO%" episode claude
 if errorlevel 1 (
   echo If the folder was missing, clone the repo into /workspaces/v1be/episodes first.
   pause
