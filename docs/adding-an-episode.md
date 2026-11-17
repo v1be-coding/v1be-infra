@@ -10,7 +10,7 @@ The Setup phase of [`V1BE_CODING.md`](https://github.com/v1be-coding/series/blob
 | 2. Review and merge it | The user |
 | 3. Run `sandbox/wizards/org-apply.sh` in Windows Sandbox. It makes the repo from `episode-template`, with its rules, environments and variables | The user |
 | 4. Approve `deploy-episodes`' apply: DNS, certificate, generated secrets, the CI role | The user |
-| 5. Set the episode's Anthropic workspace monthly limit in the Console, and enter third-party keys into SSM | The user, guided by a `wizard` |
+| 5. Set the episode's Anthropic workspace monthly limit and connect its Lambda in the Console, and enter any other third-party keys into SSM | The user, guided by a `wizard` |
 
 Claude runs no `terraform plan` or `apply`, and no admin step (ADR-0012).
 
@@ -50,6 +50,14 @@ Write them up with the `wizard` skill, one step at a time, and check each result
 - **Step 3:** the `org` plan adds the new repo, its rules and environments, and its variables (`EPISODE`, `ACCOUNT`, `SITE_URL`). Any destroy in that plan is a reason to stop.
 - **Step 4:** the `deploy-episodes` run the merge starts fails at `plan` with a null `repo_id`: the stack reads the new repo, which `org` hasn't made yet. That's expected. After step 3, the user starts it again from the Actions tab (**Run workflow** on `main`), and its apply waits for approval. For the first episode in `portfolio`, the plan also creates `aws_budgets_budget_action.portfolio[0]`, the spend guard, which exists only while an episode does.
 - **Step 5:** each key goes straight into SSM at `/<episode>/third-party/<name>` as a SecureString, from the admin login. A key never passes through chat or a transcript.
+- **Step 5, Anthropic:** no key. The Lambda proves its role to Anthropic with a short-lived AWS token (workload identity federation).
+  1. The first episode with `anthropic = true` needs the `accounts` stack applied in `portfolio`. That turns on the account's token issuer, and its `token_issuer` output is the URL Anthropic asks for.
+  2. In the Console, give the episode its own workspace with a monthly limit. The default workspace can't have one.
+  3. Run **Connect workload** with the AWS tile, in that workspace. Pin the rule to the full ARN of the production role, `v1be-<episode>-api-production`, never `role/*`. Branch environments need their own rule, or none.
+  4. The Lambda gets the rule, organization, service account and workspace IDs as plain environment variables. They're IDs, not secrets.
+  5. Leave `ANTHROPIC_API_KEY` unset. The SDK prefers it over federation.
+
+  If federation fails, fall back to a service account key in SSM, as above.
 
 ## Rules
 

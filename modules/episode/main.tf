@@ -103,6 +103,36 @@ data "aws_iam_policy_document" "boundary" {
     ]
     resources = [local.tables]
   }
+
+  # Workload identity federation: an AWS token that only Anthropic accepts, and
+  # only for five minutes. The SDK trades it for a Claude token, so no key is kept.
+  dynamic "statement" {
+    for_each = var.anthropic ? [1] : []
+
+    content {
+      sid       = "GetAnthropicTokens"
+      actions   = ["sts:GetWebIdentityToken"]
+      resources = ["*"]
+
+      condition {
+        test     = "ForAllValues:StringEquals"
+        variable = "sts:IdentityTokenAudience"
+        values   = ["https://api.anthropic.com"]
+      }
+
+      condition {
+        test     = "Null"
+        variable = "sts:IdentityTokenAudience"
+        values   = ["false"]
+      }
+
+      condition {
+        test     = "NumericLessThanEquals"
+        variable = "sts:DurationSeconds"
+        values   = ["300"]
+      }
+    }
+  }
 }
 
 resource "aws_iam_policy" "boundary" {

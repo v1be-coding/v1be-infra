@@ -33,6 +33,12 @@ variable "zone_id" {
   type        = string
 }
 
+variable "anthropic" {
+  description = "Whether the episode calls Anthropic, so its Lambda may ask STS for an Anthropic token."
+  type        = bool
+  default     = false
+}
+
 variable "origin_access_control_id" {
   description = "The edge stack's origin access control in this account."
   type        = string
