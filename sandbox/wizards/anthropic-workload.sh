@@ -242,14 +242,17 @@ if ! grep -qE "^[[:space:]]*${EPISODE}[[:space:]]*=.*anthropic[[:space:]]*=[[:sp
   exit 1
 fi
 
-ROLE_NAME="v1be-$EPISODE-api-production"
+# Every API role the episode's targets get: production and each branch
+# environment (v1be-<episode>-api-pr-<n>). Only the episode's CI can make roles
+# with this name, inside its boundary.
+ROLE_PREFIX="v1be-$EPISODE-api-"
 PARAM="/$EPISODE/third-party/anthropic-federation"
 
 banner "Anthropic: connect $EPISODE's Lambda, with no key"
 
 stage "Before you start"
 say "This gives $EPISODE its own Anthropic workspace with a spend limit, and lets"
-say "its production Lambda reach Claude with a short-lived AWS token instead of a key."
+say "its Lambdas reach Claude with a short-lived AWS token instead of a key."
 note "Nothing secret is copied. The four IDs you copy are only names, and they go to SSM at"
 note "$PARAM, never into a repo or a chat."
 note "Needs: the accounts stack applied in portfolio (v1be-infra #39), and an"
@@ -285,7 +288,7 @@ if [[ "$(aws sts get-caller-identity --profile "$MEMBER_PROFILE" --query Account
   warn "Stopping: profile $MEMBER_PROFILE didn't reach portfolio."
   exit 1
 fi
-ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/$ROLE_NAME"
+ROLE_SUBJECT="arn:aws:iam::$ACCOUNT_ID:role/$ROLE_PREFIX*"
 say "PASS: signed in to portfolio"
 pause
 
@@ -345,14 +348,14 @@ say ""
 say "Issuer, with discovery mode for the keys:"
 printf '    %s\n' "$ISSUER"
 say "Service account name:  v1be-$EPISODE"
-say "Rule name:             $EPISODE-production"
-say "Subject, exact, with no * at the end:"
-printf '    %s\n' "$ROLE_ARN"
+say "Rule name:             $EPISODE-api"
+say "Subject, ending in * so production and branch environments both match:"
+printf '    %s\n' "$ROLE_SUBJECT"
 say "Audience:              $AUDIENCE"
 say "Workspace:             $EPISODE"
 say "Scope and lifetime:    keep the defaults, workspace:developer and 600 seconds"
 say ""
-warn "Skip the wizard's live test. The Lambda doesn't exist until the first production deploy."
+warn "Skip the wizard's live test. The Lambda doesn't exist until the first deploy."
 step "When it's done, copy the service account ID (svac_...) and the rule ID (fdrl_...)."
 ask_id SERVICE_ACCOUNT_ID "Service account ID:" '^svac_[A-Za-z0-9]+$'
 ask_id FEDERATION_RULE_ID "Federation rule ID:" '^fdrl_[A-Za-z0-9]+$'
