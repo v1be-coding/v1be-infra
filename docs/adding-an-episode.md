@@ -55,7 +55,7 @@ Write them up with the `wizard` skill, one step at a time, and check each result
   2. Run `sandbox/wizards/anthropic-workload.sh <episode>` in Windows Sandbox. It covers the rest:
      - It checks that STS in Singapore issues an Anthropic token.
      - It has the user turn off auto-reload, and give the episode its own workspace with a monthly limit ($30 for `portfolio-site`). The default workspace can't have a limit.
-     - It runs **Connect workload** with the AWS tile, with the rule pinned to the full ARN of the production role, `v1be-<episode>-api-production`, never `role/*`. Branch environments need their own rule, or none.
+     - It runs **Connect workload** with the AWS tile, with the rule's subject `arn:aws:iam::<account>:role/v1be-<episode>-api-*`. That covers production and every branch environment (`…-api-pr-<n>`), so a frozen test can call the real model on a branch. Never use `role/*`, which trusts every role in the account.
   3. The wizard saves the organization, workspace, service account and rule IDs as JSON in the String parameter `/<episode>/third-party/anthropic-federation`, and the Lambda reads that at cold start. They're IDs, not secrets, but they stay out of the public repos.
   4. Leave `ANTHROPIC_API_KEY` unset. The SDK prefers it over federation.
 
