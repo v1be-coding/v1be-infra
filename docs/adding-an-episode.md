@@ -52,10 +52,12 @@ Write them up with the `wizard` skill, one step at a time, and check each result
 - **Step 5:** each key goes straight into SSM at `/<episode>/third-party/<name>` as a SecureString, from the admin login. A key never passes through chat or a transcript.
 - **Step 5, Anthropic:** no key. The Lambda proves its role to Anthropic with a short-lived AWS token (workload identity federation).
   1. The first episode with `anthropic = true` needs the `accounts` stack applied in `portfolio`. That turns on the account's token issuer, and its `token_issuer` output is the URL Anthropic asks for.
-  2. In the Console, give the episode its own workspace with a monthly limit. The default workspace can't have one.
-  3. Run **Connect workload** with the AWS tile, in that workspace. Pin the rule to the full ARN of the production role, `v1be-<episode>-api-production`, never `role/*`. Branch environments need their own rule, or none.
-  4. The Lambda gets the rule, organization, service account and workspace IDs as plain environment variables. They're IDs, not secrets.
-  5. Leave `ANTHROPIC_API_KEY` unset. The SDK prefers it over federation.
+  2. Run `sandbox/wizards/anthropic-workload.sh <episode>` in Windows Sandbox. It covers the rest:
+     - It checks that STS in Singapore issues an Anthropic token.
+     - It has the user turn off auto-reload, and give the episode its own workspace with a monthly limit ($30 for `portfolio-site`). The default workspace can't have a limit.
+     - It runs **Connect workload** with the AWS tile, with the rule pinned to the full ARN of the production role, `v1be-<episode>-api-production`, never `role/*`. Branch environments need their own rule, or none.
+  3. The wizard saves the organization, workspace, service account and rule IDs as JSON in the String parameter `/<episode>/third-party/anthropic-federation`, and the Lambda reads that at cold start. They're IDs, not secrets, but they stay out of the public repos.
+  4. Leave `ANTHROPIC_API_KEY` unset. The SDK prefers it over federation.
 
   If federation fails, fall back to a service account key in SSM, as above.
 
