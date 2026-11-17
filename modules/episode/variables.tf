@@ -33,6 +33,12 @@ variable "zone_id" {
   type        = string
 }
 
+variable "pages" {
+  description = "Whether the site is prerendered pages: clean URLs, a 404 page and security headers in production."
+  type        = bool
+  default     = false
+}
+
 variable "anthropic" {
   description = "Whether the episode calls Anthropic, so its Lambda may ask STS for an Anthropic token."
   type        = bool

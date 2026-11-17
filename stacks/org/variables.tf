@@ -16,6 +16,7 @@ variable "episodes" {
     account   = string
     subdomain = string
     anthropic = optional(bool, false)
+    pages     = optional(bool, false)
     zone      = optional(string)
     repo      = optional(string)
   }))
