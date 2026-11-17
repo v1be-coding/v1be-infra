@@ -26,7 +26,7 @@ locals {
     for name, episode in var.episodes : coalesce(episode.repo, name) => {
       EPISODE  = name
       ACCOUNT  = episode.account
-      SITE_URL = "https://${episode.subdomain}.${coalesce(episode.zone, local.main_zone)}"
+      SITE_URL = "https://${episode.subdomain == "" ? "" : "${episode.subdomain}."}${coalesce(episode.zone, local.main_zone)}"
     }
   }
 

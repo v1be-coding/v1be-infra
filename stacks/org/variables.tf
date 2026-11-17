@@ -24,4 +24,11 @@ variable "episodes" {
     condition     = alltrue([for episode in var.episodes : contains(["portfolio", "cafe"], episode.account)])
     error_message = "Each episode's account must be portfolio or cafe."
   }
+
+  # An empty subdomain is the zone's apex. A café episode can't take it, as its
+  # demo needs a -demo address beside production's.
+  validation {
+    condition     = alltrue([for episode in var.episodes : episode.subdomain != "" || episode.account == "portfolio"])
+    error_message = "Only a portfolio episode can take the zone's apex (an empty subdomain)."
+  }
 }
