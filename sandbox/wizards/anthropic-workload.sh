@@ -223,6 +223,8 @@ REGION="ap-southeast-1"
 AUDIENCE="https://api.anthropic.com"
 export AWS_PROFILE="v1be-admin"
 MEMBER_PROFILE="v1be-admin-portfolio"
+# Stops Git Bash rewriting the SSM name, which starts with /, into a Windows path.
+export MSYS_NO_PATHCONV=1
 CONSOLE="https://platform.claude.com"
 
 # Admin logins happen only in Windows Sandbox (ADR-0012).
