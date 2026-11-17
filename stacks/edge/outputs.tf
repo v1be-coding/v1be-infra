@@ -11,3 +11,8 @@ output "origin_check_function_name" {
   description = "The header-check function, with this name in both accounts."
   value       = module.portfolio.origin_check_function_name
 }
+
+output "origin_check_pages_function_name" {
+  description = "The header-check function with clean URLs, with this name in both accounts."
+  value       = module.portfolio.origin_check_pages_function_name
+}

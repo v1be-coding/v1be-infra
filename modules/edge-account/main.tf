@@ -48,6 +48,70 @@ resource "aws_cloudfront_function" "origin_check" {
   JS
 }
 
+# The same check, for a site of prerendered pages, where each page is a folder's
+# index.html. An episode opts in with `pages = true`. A behaviour can have only
+# one viewer-request function, so this can't be a second function after the
+# check. Keep the check identical to origin_check's above.
+#   /about/   -> 301 to /about, with the query string kept
+#   /about    -> /about/index.html, read from the bucket
+#   /app.js   -> unchanged, because the last segment has a dot
+resource "aws_cloudfront_function" "origin_check_pages" {
+  name    = "v1be-origin-check-pages"
+  runtime = "cloudfront-js-2.0"
+  comment = "The origin check, plus clean URLs for prerendered pages."
+  publish = true
+
+  key_value_store_associations = [aws_cloudfront_key_value_store.origin.arn]
+
+  code = <<-JS
+    import cf from 'cloudfront';
+
+    const store = cf.kvs();
+
+    function queryString(qs) {
+      const parts = [];
+      for (const name in qs) {
+        const item = qs[name];
+        const values = item.multiValue ? item.multiValue : [item];
+        for (const v of values) {
+          parts.push(v.value === '' ? name : name + '=' + v.value);
+        }
+      }
+      return parts.length ? '?' + parts.join('&') : '';
+    }
+
+    async function handler(event) {
+      const request = event.request;
+      const sent = request.headers['${var.origin_header}'];
+      let expected;
+      try {
+        expected = await store.get('${local.store_key}');
+      } catch (err) {
+        expected = undefined;
+      }
+      if (!sent || !expected || sent.value !== expected) {
+        return { statusCode: 403, statusDescription: 'Forbidden' };
+      }
+      delete request.headers['${var.origin_header}'];
+
+      const uri = request.uri;
+      if (uri.length > 1 && uri.endsWith('/')) {
+        const path = uri.replace(/\/+$/, '') || '/';
+        return {
+          statusCode: 301,
+          statusDescription: 'Moved Permanently',
+          headers: { location: { value: path + queryString(request.querystring) } },
+        };
+      }
+      const last = uri.substring(uri.lastIndexOf('/') + 1);
+      if (uri !== '/' && last.indexOf('.') === -1) {
+        request.uri = uri + '/index.html';
+      }
+      return request;
+    }
+  JS
+}
+
 resource "aws_cloudfront_origin_access_control" "s3" {
   name                              = "v1be-s3"
   description                       = "Lets CloudFront read private S3 sites."
