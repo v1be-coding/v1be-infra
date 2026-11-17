@@ -23,6 +23,55 @@ data "aws_cloudfront_function" "origin_check" {
   stage = "LIVE"
 }
 
+# The same check plus clean URLs, from the edge stack. Only for `pages = true`.
+data "aws_cloudfront_function" "origin_check_pages" {
+  count = var.pages ? 1 : 0
+
+  name  = "v1be-origin-check-pages"
+  stage = "LIVE"
+}
+
+# Security headers for a pages site, on its pages and its API alike. A custom
+# policy, because CloudFront's managed SecurityHeadersPolicy adds
+# x-xss-protection, which modern guidance says to leave out. The CSP allows only
+# the site's own origin, so an episode that needs more must widen it here.
+resource "aws_cloudfront_response_headers_policy" "pages" {
+  count = var.pages ? 1 : 0
+
+  name    = "${local.prefix}-headers"
+  comment = "Security headers for ${var.name}."
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      override                   = true
+    }
+
+    content_type_options {
+      override = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+
+    content_security_policy {
+      content_security_policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+      override                = true
+    }
+  }
+
+  custom_headers_config {
+    items {
+      header   = "permissions-policy"
+      value    = "camera=(), microphone=(), geolocation=()"
+      override = true
+    }
+  }
+}
+
 data "aws_cloudfront_cache_policy" "optimized" {
   name = "Managed-CachingOptimized"
 }
@@ -145,12 +194,30 @@ resource "aws_cloudfront_distribution" "site" {
   }
 
   default_cache_behavior {
-    target_origin_id       = "site"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    cache_policy_id        = data.aws_cloudfront_cache_policy.optimized.id
-    compress               = true
+    target_origin_id           = "site"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+    cache_policy_id            = data.aws_cloudfront_cache_policy.optimized.id
+    response_headers_policy_id = var.pages ? aws_cloudfront_response_headers_policy.pages[0].id : null
+    compress                   = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = var.pages ? data.aws_cloudfront_function.origin_check_pages[0].arn : data.aws_cloudfront_function.origin_check.arn
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/api/*"
+    target_origin_id           = "api"
+    viewer_protocol_policy     = "https-only"
+    allowed_methods            = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods             = ["GET", "HEAD"]
+    cache_policy_id            = data.aws_cloudfront_cache_policy.disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.api.id
+    response_headers_policy_id = var.pages ? aws_cloudfront_response_headers_policy.pages[0].id : null
+    compress                   = true
 
     function_association {
       event_type   = "viewer-request"
@@ -158,19 +225,16 @@ resource "aws_cloudfront_distribution" "site" {
     }
   }
 
-  ordered_cache_behavior {
-    path_pattern             = "/api/*"
-    target_origin_id         = "api"
-    viewer_protocol_policy   = "https-only"
-    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods           = ["GET", "HEAD"]
-    cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.api.id
-    compress                 = true
+  # A missing page is a 403 from the private bucket, so both map to the 404 page.
+  # This covers the whole distribution: an API 403 or 404 also gets the page.
+  dynamic "custom_error_response" {
+    for_each = var.pages ? [403, 404] : []
 
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = data.aws_cloudfront_function.origin_check.arn
+    content {
+      error_code            = custom_error_response.value
+      response_code         = 404
+      response_page_path    = "/404.html"
+      error_caching_min_ttl = 60
     }
   }
 
