@@ -11,6 +11,14 @@ locals {
   repos = { for name, episode in var.episodes : name => coalesce(episode.repo, name) }
   zones = { for name, episode in var.episodes : name => coalesce(episode.zone, local.main_zone) }
 
+  # Each episode's address in portfolio. An empty subdomain is the zone's apex, and
+  # a café episode's demo takes a -demo address, as production has the plain one.
+  portfolio_hostnames = {
+    for name, episode in var.episodes : name => (
+      episode.subdomain == "" ? local.zones[name] : "${episode.subdomain}${episode.account == "cafe" ? "-demo" : ""}.${local.zones[name]}"
+    )
+  }
+
   # Numeric IDs survive a rename, so a new repo can't take over this trust.
   repo_subs = {
     for name, repo in local.repos :
@@ -71,7 +79,7 @@ module "portfolio" {
   account_id               = var.portfolio_account_id
   repo_sub                 = local.repo_subs[each.key]
   oidc_provider_arn        = data.aws_iam_openid_connect_provider.portfolio.arn
-  hostname                 = "${each.value.subdomain}${each.value.account == "cafe" ? "-demo" : ""}.${local.zones[each.key]}"
+  hostname                 = local.portfolio_hostnames[each.key]
   zone_id                  = data.cloudflare_zone.episode[local.zones[each.key]].zone_id
   origin_access_control_id = data.terraform_remote_state.edge.outputs.origin_access_control_ids.portfolio
 }

@@ -23,7 +23,7 @@ Work in a fresh clone from GitHub, on a new branch from `origin/main`. A local c
 | Field | Meaning |
 | --- | --- |
 | `account` | `portfolio`, or `cafe` for the café's real backend |
-| `subdomain` | The site is `<subdomain>.<zone>`. A café episode's demo is `<subdomain>-demo.<zone>` |
+| `subdomain` | The site is `<subdomain>.<zone>`. A café episode's demo is `<subdomain>-demo.<zone>`. An empty subdomain puts a portfolio episode at the zone's apex |
 | `zone` | Optional. Defaults to the main zone |
 | `repo` | Optional. Defaults to the episode's name |
 | `anthropic` | Optional. Set it when the app calls Anthropic |
@@ -48,7 +48,7 @@ bash ci/check-provider-aliases.sh stacks
 Write them up with the `wizard` skill, one step at a time, and check each result before the next.
 
 - **Step 3:** the `org` plan adds the new repo, its rules and environments, and its variables (`EPISODE`, `ACCOUNT`, `SITE_URL`). Any destroy in that plan is a reason to stop.
-- **Step 4:** `deploy-episodes` runs when the PR merges, and its apply waits for approval. For the first episode in `portfolio`, the plan also creates `aws_budgets_budget_action.portfolio[0]`, the spend guard, which exists only while an episode does.
+- **Step 4:** the `deploy-episodes` run the merge starts fails at `plan` with a null `repo_id`: the stack reads the new repo, which `org` hasn't made yet. That's expected. After step 3, the user starts it again from the Actions tab (**Run workflow** on `main`), and its apply waits for approval. For the first episode in `portfolio`, the plan also creates `aws_budgets_budget_action.portfolio[0]`, the spend guard, which exists only while an episode does.
 - **Step 5:** each key goes straight into SSM at `/<episode>/third-party/<name>` as a SecureString, from the admin login. A key never passes through chat or a transcript.
 
 ## Rules
