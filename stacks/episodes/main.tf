@@ -78,6 +78,7 @@ module "portfolio" {
   account                  = "portfolio"
   account_id               = var.portfolio_account_id
   repo_sub                 = local.repo_subs[each.key]
+  anthropic                = each.value.anthropic
   oidc_provider_arn        = data.aws_iam_openid_connect_provider.portfolio.arn
   hostname                 = local.portfolio_hostnames[each.key]
   zone_id                  = data.cloudflare_zone.episode[local.zones[each.key]].zone_id
@@ -97,6 +98,7 @@ module "cafe" {
   account                  = "cafe"
   account_id               = var.cafe_account_id
   repo_sub                 = local.repo_subs[each.key]
+  anthropic                = each.value.anthropic
   oidc_provider_arn        = data.aws_iam_openid_connect_provider.cafe.arn
   hostname                 = "${each.value.subdomain}.${local.zones[each.key]}"
   zone_id                  = data.cloudflare_zone.episode[local.zones[each.key]].zone_id
