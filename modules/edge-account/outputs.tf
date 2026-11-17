@@ -7,3 +7,8 @@ output "origin_check_function_name" {
   description = "Name of the header-check function."
   value       = aws_cloudfront_function.origin_check.name
 }
+
+output "origin_check_pages_function_name" {
+  description = "Name of the header-check function with clean URLs for prerendered pages."
+  value       = aws_cloudfront_function.origin_check_pages.name
+}
