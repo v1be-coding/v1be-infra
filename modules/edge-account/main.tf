@@ -113,6 +113,51 @@ resource "aws_cloudfront_function" "origin_check_pages" {
   JS
 }
 
+# Clean URLs for branch environments, which serve from their raw cloudfront.net
+# address with no Cloudflare in front, so they can't pass the check above
+# (ADR-0010). Every branch edge attaches this one function by name, because CI
+# can read and attach functions but not write them. Keep the rewrite identical
+# to origin_check_pages's, so a branch behaves like production.
+resource "aws_cloudfront_function" "pages" {
+  name    = "v1be-pages"
+  runtime = "cloudfront-js-2.0"
+  comment = "Clean URLs for prerendered pages, with no origin check. Branch environments only."
+  publish = true
+
+  code = <<-JS
+    function queryString(qs) {
+      const parts = [];
+      // Runtime 2.0 has for and for-in, but not for-of.
+      for (var name in qs) {
+        var item = qs[name];
+        var values = item.multiValue ? item.multiValue : [item];
+        for (var i = 0; i < values.length; i++) {
+          parts.push(values[i].value === '' ? name : name + '=' + values[i].value);
+        }
+      }
+      return parts.length ? '?' + parts.join('&') : '';
+    }
+
+    function handler(event) {
+      const request = event.request;
+      const uri = request.uri;
+      if (uri.length > 1 && uri.endsWith('/')) {
+        const path = uri.replace(/\/+$/, '') || '/';
+        return {
+          statusCode: 301,
+          statusDescription: 'Moved Permanently',
+          headers: { location: { value: path + queryString(request.querystring) } },
+        };
+      }
+      const last = uri.substring(uri.lastIndexOf('/') + 1);
+      if (uri !== '/' && last.indexOf('.') === -1) {
+        request.uri = uri + '/index.html';
+      }
+      return request;
+    }
+  JS
+}
+
 resource "aws_cloudfront_origin_access_control" "s3" {
   name                              = "v1be-s3"
   description                       = "Lets CloudFront read private S3 sites."

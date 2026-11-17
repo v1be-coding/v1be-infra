@@ -8,7 +8,7 @@ The Foundation for [V1be Coding](https://github.com/v1be-coding), a build series
 | --- | --- |
 | `stacks/org/` | The Organization, member accounts, SCPs, Identity Center, Budgets, and GitHub org settings and repos |
 | `stacks/accounts/` | Once per member account: state buckets, GitHub OIDC login, CI roles, Cost Anomaly Detection, and the café backups |
-| `stacks/edge/` | CI runs this for each Cloudflare zone: Full (strict), the origin header, the cache bypass and the rate limit. In each member account, the header-check function and what it needs |
+| `stacks/edge/` | CI runs this for each Cloudflare zone: Full (strict), the origin header, the cache bypass and the rate limit. In each member account, the header-check functions and what they need, and the clean-URL function branch environments attach |
 | `modules/` | Pieces the stacks share |
 | `sandbox/` | The Windows Sandbox config that admin logins run in, and the step-by-step wizards |
 | `.devcontainer/` | The container Claude Code works in, which holds no admin login |
