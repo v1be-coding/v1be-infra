@@ -16,3 +16,8 @@ output "origin_check_pages_function_name" {
   description = "The header-check function with clean URLs, with this name in both accounts."
   value       = module.portfolio.origin_check_pages_function_name
 }
+
+output "pages_function_name" {
+  description = "The clean-URL function for branch environments, with this name in both accounts."
+  value       = module.portfolio.pages_function_name
+}

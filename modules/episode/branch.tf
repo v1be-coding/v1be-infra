@@ -25,6 +25,15 @@ data "aws_iam_policy_document" "branch" {
     resources = ["*"]
   }
 
+  # The edge stack's clean-URL function, which every branch edge attaches. The
+  # provider's data source reads it with DescribeFunction, which Get* doesn't
+  # cover. CI can't create, change or delete functions.
+  statement {
+    sid       = "DescribePagesFunction"
+    actions   = ["cloudfront:DescribeFunction"]
+    resources = ["arn:aws:cloudfront::${var.account_id}:function/v1be-pages"]
+  }
+
   # CreateDistribution has no resource type, so only the tag can limit it.
   statement {
     sid       = "CreateTaggedDistributions"
