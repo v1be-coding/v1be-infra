@@ -70,11 +70,12 @@ resource "aws_cloudfront_function" "origin_check_pages" {
 
     function queryString(qs) {
       const parts = [];
-      for (const name in qs) {
-        const item = qs[name];
-        const values = item.multiValue ? item.multiValue : [item];
-        for (const v of values) {
-          parts.push(v.value === '' ? name : name + '=' + v.value);
+      // Runtime 2.0 has for and for-in, but not for-of.
+      for (var name in qs) {
+        var item = qs[name];
+        var values = item.multiValue ? item.multiValue : [item];
+        for (var i = 0; i < values.length; i++) {
+          parts.push(values[i].value === '' ? name : name + '=' + values[i].value);
         }
       }
       return parts.length ? '?' + parts.join('&') : '';
