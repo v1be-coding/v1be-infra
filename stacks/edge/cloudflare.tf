@@ -97,6 +97,15 @@ resource "cloudflare_ruleset" "cache_bypass" {
 # The free plan's one rate-limit rule, shared by every episode: a coarse flood
 # guard, with each episode's real limits in the app. The free plan only allows a
 # 10-second period and timeout, and no regex.
+#
+# Its blocks never reach AWS, so each episode's rate-limit alarm doesn't count
+# them, and the free plan has no alert for them. That split is on purpose
+# (2026-11-18): a blocked request costs nothing, and a steady flood still leaks
+# about 50 requests per 10 s to the app once each block ends, so the app's limit
+# and alarm still see it. The blocks show in the zone's Security Events. The only
+# Cloudflare alert is the free HTTP DDoS Attack Alert, by email, set in the
+# dashboard (Notifications), as Terraform would need an account-level token and
+# the address as a secret.
 resource "cloudflare_ruleset" "rate_limit" {
   for_each = local.zones
 
