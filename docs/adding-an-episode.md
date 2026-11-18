@@ -32,6 +32,10 @@ Work in a fresh clone from GitHub, on a new branch from `origin/main`. A local c
 
 **Any other infra change** the episode needs, such as a hostname shape the module doesn't support yet, goes in `modules/episode` or the stacks, kept generic so later episodes can use it. Say in the PR why the episode needs it.
 
+**An edge change for production** (a function, a headers policy, a route) also needs an answer for branch environments, in the same PR. Do they need it too? If so, can CI's branch role read or build it (`modules/episode/branch.tf`)? Episode 0 missed this twice: the branch headers policy, and the clean-URL function #46 added.
+
+**A new zone** gets every Cloudflare setting that rewrites responses pinned in `stacks/edge/cloudflare.tf` through `local.zones`. Also look in the zone's dashboard for features Terraform doesn't manage yet: Web Analytics' automatic setup injected a beacon that broke episode 0's CSP, so keep it off.
+
 **Checks before opening the PR.** CI runs the same ones, but only after the push:
 
 ```bash
