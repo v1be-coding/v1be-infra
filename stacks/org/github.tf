@@ -109,6 +109,21 @@ locals {
 
   # GitHub's own app ID for GitHub Actions, so only Actions can report the check.
   github_actions_app_id = 15368
+
+  # The v1be-agent App's installation in this org, from the URL of its settings
+  # page. An ID, not a secret: using it still needs an admin's token.
+  agent_installation_id = "179415314"
+}
+
+# The agent's App is installed on selected repos only, so each repo this stack
+# makes is added here. Without it, the App's pushes to a new episode repo got a
+# 403 (portfolio-site, 2026-11-17). Needs a user token, as the wizard's is: the
+# provider doesn't support this resource under App authentication.
+resource "github_app_installation_repository" "agent" {
+  for_each = github_repository.this
+
+  installation_id = local.agent_installation_id
+  repository      = each.value.name
 }
 
 data "github_user" "repo_owner" {
