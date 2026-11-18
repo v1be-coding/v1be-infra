@@ -14,6 +14,16 @@ resource "cloudflare_zone_setting" "ssl" {
   value      = "strict"
 }
 
+# Off so Cloudflare doesn't rewrite email addresses in an episode's prerendered
+# HTML or inject its decode script, which breaks hydration and exact-text specs.
+resource "cloudflare_zone_setting" "email_obfuscation" {
+  for_each = local.zones
+
+  zone_id    = data.cloudflare_zone.this[each.key].zone_id
+  setting_id = "email_obfuscation"
+  value      = "off"
+}
+
 # The rules below match every proxied hostname in the zone, so a proxied record
 # must only ever point at this series' CloudFront. Any other origin would receive
 # the secret.
