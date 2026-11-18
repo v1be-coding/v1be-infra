@@ -24,6 +24,27 @@ resource "cloudflare_zone_setting" "email_obfuscation" {
   value      = "off"
 }
 
+# The other settings that rewrite an episode's HTML, pinned off so a dashboard
+# default can't change what production serves. Branch environments skip
+# Cloudflare, so only production's smoke run would catch them. Rocket Loader
+# rewrites script tags and injects its own loader, which a strict CSP blocks.
+# Automatic HTTPS Rewrites edits links in the HTML that React hydrates.
+resource "cloudflare_zone_setting" "rocket_loader" {
+  for_each = local.zones
+
+  zone_id    = data.cloudflare_zone.this[each.key].zone_id
+  setting_id = "rocket_loader"
+  value      = "off"
+}
+
+resource "cloudflare_zone_setting" "automatic_https_rewrites" {
+  for_each = local.zones
+
+  zone_id    = data.cloudflare_zone.this[each.key].zone_id
+  setting_id = "automatic_https_rewrites"
+  value      = "off"
+}
+
 # The rules below match every proxied hostname in the zone, so a proxied record
 # must only ever point at this series' CloudFront. Any other origin would receive
 # the secret.
