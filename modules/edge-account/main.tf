@@ -21,7 +21,7 @@ resource "aws_cloudfront_function" "origin_check" {
   name    = "v1be-origin-check"
   runtime = "cloudfront-js-2.0"
   comment = "Rejects requests that didn't come through Cloudflare."
-  publish = true
+  publish = false # ci/test-functions.sh tests DEVELOPMENT, then publishes it.
 
   key_value_store_associations = [aws_cloudfront_key_value_store.origin.arn]
 
@@ -59,7 +59,7 @@ resource "aws_cloudfront_function" "origin_check_pages" {
   name    = "v1be-origin-check-pages"
   runtime = "cloudfront-js-2.0"
   comment = "The origin check, plus clean URLs for prerendered pages."
-  publish = true
+  publish = false # ci/test-functions.sh tests DEVELOPMENT, then publishes it.
 
   key_value_store_associations = [aws_cloudfront_key_value_store.origin.arn]
 
@@ -122,7 +122,7 @@ resource "aws_cloudfront_function" "pages" {
   name    = "v1be-pages"
   runtime = "cloudfront-js-2.0"
   comment = "Clean URLs for prerendered pages, with no origin check. Branch environments only."
-  publish = true
+  publish = false # ci/test-functions.sh tests DEVELOPMENT, then publishes it.
 
   code = <<-JS
     function queryString(qs) {
