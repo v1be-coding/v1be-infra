@@ -131,6 +131,11 @@ jobs:
       - name: terraform apply
         env: *terraform-env
         run: timeout -s INT -k 2m 10m terraform -chdir="$STACK" apply -no-color -auto-approve -lock-timeout=2m -var-file=../episodes.tfvars
+      # Terraform writes the functions' DEVELOPMENT stage only. This tests each
+      # one and publishes it to LIVE only if all pass (#42, #45).
+      - name: Test and publish the CloudFront Functions
+        timeout-minutes: 5
+        run: bash ci/test-functions.sh
       - name: Name a stale state lock
         if: failure()
         run: |
