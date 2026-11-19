@@ -26,4 +26,6 @@ The Foundation for [V1be Coding](https://github.com/v1be-coding), a build series
 
 `sandbox/wizards/github-template-access.sh` gives the bot's token Issues access and saves the Infracost key as an organization secret, once, before `org-apply.sh` adds the template's rules.
 
+`sandbox/wizards/test-keys.sh <episode>` makes an episode's two test ingest keys, saves them straight into its Actions secrets, and prints only their SHA-256 hashes. AInakupo! uses it; its `docs/agents/test-keys-setup.md` has the rules.
+
 `edge` runs in GitHub Actions after a merge, once the owner approves the apply. `sandbox/wizards/edge-setup.sh` sets it up the first time.
