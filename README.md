@@ -28,4 +28,6 @@ The Foundation for [V1be Coding](https://github.com/v1be-coding), a build series
 
 `sandbox/wizards/test-keys.sh <episode>` makes an episode's two test ingest keys, saves them straight into its Actions secrets, and prints only their SHA-256 hashes. AInakupo! uses it; its `docs/agents/test-keys-setup.md` has the rules.
 
+`sandbox/wizards/ainakupo-keys.sh <episode>` runs AInakupo's `keys:add` for a sending episode, such as `portfolio-site`. It builds the script from a pinned `ainakupo` commit before you sign in, writes the two keys to `/<episode>/ainakupo/*` in SSM, and prints only `aik_prod_…abcd`-style hints. `ainakupo`'s `docs/using-ainakupo.md` covers the rest.
+
 `edge` runs in GitHub Actions after a merge, once the owner approves the apply. `sandbox/wizards/edge-setup.sh` sets it up the first time.
