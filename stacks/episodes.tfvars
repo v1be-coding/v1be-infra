@@ -10,4 +10,7 @@
 episodes = {
   # Episode 0: the series home and the "Ask about Emiliano" chat.
   portfolio-site = { account = "portfolio", subdomain = "", anthropic = true, pages = true }
+
+  # Episode 1: AInakupo!, LLM tracing, cost and evals. Later episodes report through it.
+  ainakupo = { account = "portfolio", subdomain = "ainakupo", anthropic = true, pages = true }
 }
