@@ -52,7 +52,7 @@ bash ci/check-provider-aliases.sh stacks
 
 Write them up with the `wizard` skill, one step at a time, and check each result before the next.
 
-- **Step 3:** the `org` plan adds the new repo, its rules and environments, and its variables (`EPISODE`, `ACCOUNT`, `SITE_URL`). Any destroy in that plan is a reason to stop.
+- **Step 3:** the `org` plan adds the new repo, its rules and environments, and its variables (`EPISODE`, `ACCOUNT`, `SITE_URL`). Any destroy in that plan is a reason to stop: the wizard lists it and asks you to type `destroy`, so answer anything else unless you meant to remove something.
 - **Step 3, the App:** the `v1be-agent` App is installed on selected repos only, and `org` can't add one: GitHub refuses the wizard's `gh` login token for that ("You do not have permission to modify this app", 2026-11-19). So after the apply, in the Sandbox, the user opens the org's **Settings → GitHub Apps → `v1be-agent` → Configure**, adds the new repo under **Repository access**, and saves. Without it, the App's first push to the repo gets a 403, as `portfolio-site`'s did.
 - **Step 3a:** Claude runs `gh api installation/repositories --jq '.repositories[].name'` in the dev container, which uses the App's token, and confirms the new repo is listed before any episode session starts.
 - **Step 4:** the `deploy-episodes` run the merge starts fails at `plan` with a null `repo_id`: the stack reads the new repo, which `org` hasn't made yet. That's expected. After step 3, the user starts it again from the Actions tab (**Run workflow** on `main`), and its apply waits for approval. For the first episode in `portfolio`, the plan also creates `aws_budgets_budget_action.portfolio[0]`, the spend guard, which exists only while an episode does.

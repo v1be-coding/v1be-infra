@@ -307,15 +307,21 @@ fi
 printf '\n'
 NO_CHANGES=0
 grep -q '^No changes\.' plan.txt && NO_CHANGES=1
-if (( ! NO_CHANGES )) && ! grep -qE '^Plan: .*, 0 to destroy\.$' plan.txt; then
-  warn "Stopping: this plan would destroy something. Nothing was changed. Tell Claude the Plan line."
-  exit 1
-fi
-if (( ! NO_CHANGES )) && grep -q 'must be replaced' plan.txt; then
-  warn "Stopping: this plan would replace something. Nothing was changed. Tell Claude what."
+# A destroy or a replace is allowed only after the Apply stage's typed check.
+# The list comes from plan.txt, the output of the same plan saved as tfplan.
+DESTROY_COUNT="$(grep -m1 -oE '[0-9]+ to destroy' plan.txt | grep -oE '^[0-9]+' || echo 0)"
+DESTROYS="$(grep -E '^  # .* (will be destroyed|must be replaced)' plan.txt | sed -e 's/^  # //' || true)"
+if (( DESTROY_COUNT > 0 )) && [[ -z "$DESTROYS" ]]; then
+  warn "Stopping: the Plan line counts destroys, but no resource says so. Nothing was changed. Tell Claude the Plan line."
   exit 1
 fi
 grep -E '^(Plan:|No changes\.)' plan.txt
+if [[ -n "$DESTROYS" ]]; then
+  printf '\n'
+  warn "This plan destroys or replaces:"
+  while IFS= read -r line; do note "  - $line"; done <<<"$DESTROYS"
+  note "The Apply stage asks you to type 'destroy' before it applies."
+fi
 step "Scroll up and read what will change."
 pause
 
@@ -327,6 +333,19 @@ else
     warn "Stopping. Nothing was changed. Tell Claude what looked wrong."
     exit 1
   fi
+  if [[ -n "$DESTROYS" ]]; then
+    warn "Applying this plan destroys or replaces:"
+    while IFS= read -r line; do note "  - $line"; done <<<"$DESTROYS"
+    note "A destroyed repo, rule or environment can't be brought back by Terraform."
+    REPLY_DESTROY=""
+    printf '  %sType destroy to apply this plan, or anything else to stop:%s ' "$YELLOW" "$RESET"
+    read -r REPLY_DESTROY || true
+    if [[ "$REPLY_DESTROY" != "destroy" ]]; then
+      warn "Stopping. Nothing was changed."
+      exit 1
+    fi
+  fi
+  # The saved plan, so exactly what was listed above is applied.
   terraform apply -input=false tfplan
 fi
 pause
