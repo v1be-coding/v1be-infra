@@ -38,7 +38,7 @@ Work in a fresh clone from GitHub, on a new branch from `origin/main`. A local c
 
 **An edge change for production** (a function, a headers policy, a route) also needs an answer for branch environments, in the same PR. Do they need it too? If so, can CI's branch role read or build it (`modules/episode/branch.tf`)? Episode 0 missed this twice: the branch headers policy, and the clean-URL function #46 added.
 
-**A new zone** gets every Cloudflare setting that rewrites responses pinned in `stacks/edge/cloudflare.tf` through `local.zones`. Also look in the zone's dashboard for features Terraform doesn't manage yet: Web Analytics' automatic setup injected a beacon that broke episode 0's CSP, so keep it off.
+**A new zone** gets every Cloudflare setting that rewrites responses pinned in `stacks/edge/cloudflare.tf` through `local.zones`. Bot Fight Mode is pinned off there too. One feature stays in the dashboard: a new free zone starts with Web Analytics' automatic setup on, and its beacon broke episode 0's CSP. In the zone's dashboard, open Web Analytics, then Manage RUM settings, and disable it. Don't delete the site: Cloudflare promises not to turn RUM back on once it's disabled, and doesn't say whether deleting counts.
 
 **Checks before opening the PR.** CI runs the same ones, but only after the push:
 

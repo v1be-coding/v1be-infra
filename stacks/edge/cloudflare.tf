@@ -45,6 +45,27 @@ resource "cloudflare_zone_setting" "automatic_https_rewrites" {
   value      = "off"
 }
 
+# Bot Fight Mode, pinned off. While it's on, the free plan can't turn off its
+# JavaScript detections, which inject a /cdn-cgi/ script into every page. The CSP
+# blocks it (no nonce on prerendered HTML), and the served-HTML smoke test fails on
+# it. It can also challenge /api/* and the frozen tests' runners, and no skip,
+# bypass or allow rule exempts it (research: cloudflare-web-analytics-bot-fight-mode).
+# Only fight_mode is set: enable_js is left to Cloudflare, as Free can't change it.
+# Needs the token's zone permission Bot Management Edit. Removing this resource
+# leaves the zone as it is.
+#
+# Web Analytics (RUM) automatic setup is off in the dashboard, not here.
+# cloudflare_web_analytics_site needs Account Settings Write, an account-wide
+# permission that covers membership, and the provider doesn't read `enabled` back,
+# so Terraform couldn't see a dashboard re-enable anyway. Cloudflare doesn't turn
+# it back on once disabled.
+resource "cloudflare_bot_management" "this" {
+  for_each = local.zones
+
+  zone_id    = data.cloudflare_zone.this[each.key].zone_id
+  fight_mode = false
+}
+
 # The rules below match every proxied hostname in the zone, so a proxied record
 # must only ever point at this series' CloudFront. Any other origin would receive
 # the secret.
