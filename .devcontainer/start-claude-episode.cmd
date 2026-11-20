@@ -25,6 +25,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem Warn when the volume holds a repo that isn't an episode, since this session
+rem could read it. A warning only: press a key to start anyway.
+for %%I in ("%CD%\..") do set "INFRA=%%~fI"
+docker compose run --rm -v "%CD%\check-episodes-volume.sh:/tmp/check-episodes-volume.sh:ro" -v "%INFRA%\stacks\episodes.tfvars:/tmp/episodes.tfvars:ro" episode bash /tmp/check-episodes-volume.sh /tmp/episodes.tfvars /workspaces/v1be/episodes
+if errorlevel 1 pause
+
 docker compose run --rm -w "/workspaces/v1be/episodes/%REPO%" episode claude
 if errorlevel 1 (
   echo If the folder was missing, clone the repo into /workspaces/v1be/episodes first.
