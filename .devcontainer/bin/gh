@@ -44,7 +44,15 @@ is_write() {
 
 check_polling "$@"
 
-GH_TOKEN="$("$(dirname "$0")/app-token")"
+# V1BE_GH_READ_ONLY=1 (set by the template's .claude/bin/gh-read.mjs) asks for a
+# token that can only read Actions and Issues, and refuses any write up front.
+# If that token can't be made, the call fails: it never falls back to the full one.
+if [[ "${V1BE_GH_READ_ONLY:-}" == 1 ]]; then
+  is_write "$@" && refuse "a write isn't allowed with V1BE_GH_READ_ONLY=1"
+  GH_TOKEN="$("$(dirname "$0")/app-token" --read-only)"
+else
+  GH_TOKEN="$("$(dirname "$0")/app-token")"
+fi
 export GH_TOKEN
 
 # git's sign-in and long watches skip the queue.

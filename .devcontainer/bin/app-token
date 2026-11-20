@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Prints a GitHub token for the agent's App, for the gh wrapper beside this file.
 // Install tokens last an hour, so one is cached and replaced five minutes early.
+// With --read-only, the token is narrowed to Actions and Issues read (plus the
+// metadata every token has), so a flawed read wrapper can't write. GitHub caps a
+// narrowed token at the App's own grant. Usage: app-token [--read-only]
 // bot-identity.sh saves the key and IDs in the gh-config volume (ADR-0012).
 "use strict";
 const crypto = require("node:crypto");
@@ -8,7 +11,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const dir = path.join(process.env.HOME, ".config/gh/app");
-const cachePath = path.join(dir, "token.json");
+const readOnly = process.argv.slice(2).join(" ") === "--read-only";
+if (process.argv.length > 2 && !readOnly) {
+  console.error("app-token: the only option is --read-only");
+  process.exit(2);
+}
+const cachePath = path.join(dir, readOnly ? "token-read.json" : "token.json");
+const READ_ONLY = { actions: "read", issues: "read" };
 const refreshMargin = 5 * 60 * 1000;
 
 function cachedToken() {
@@ -45,9 +54,13 @@ async function mintToken() {
       "User-Agent": "v1be-app-token",
       "X-GitHub-Api-Version": "2022-11-28",
     },
+    ...(readOnly && { body: JSON.stringify({ permissions: READ_ONLY }) }),
   });
   if (!response.ok) throw new Error(`GitHub refused the App token (HTTP ${response.status})`);
-  const { token, expires_at: expiresAt } = await response.json();
+  const { token, expires_at: expiresAt, permissions } = await response.json();
+  // Never hand out a token wider than asked for.
+  if (readOnly && JSON.stringify(permissions) !== JSON.stringify({ ...READ_ONLY, metadata: "read" }))
+    throw new Error(`GitHub gave the read-only token ${JSON.stringify(permissions)}`);
 
   // Written to one side first, so a parallel call never reads half a file.
   const pending = `${cachePath}.${process.pid}`;
