@@ -319,7 +319,7 @@ fi
 CLUSTER_ENDPOINT="$CLUSTER_ID.dsql.$REGION.on.aws"
 say "PASS: found $CLUSTER_NAME"
 
-FOUND="$(aws ssm get-parameters --names "${PARAMS[@]}" --profile "$MEMBER_PROFILE" \
+FOUND="$(MSYS_NO_PATHCONV=1 aws ssm get-parameters --names "${PARAMS[@]}" --profile "$MEMBER_PROFILE" \
   --region "$REGION" --query 'Parameters[].Name' --output text | tr -d '\r')"
 if [[ -n "$FOUND" ]]; then
   note "SSM already has: $FOUND"
@@ -348,7 +348,7 @@ printf '%s\n' "$RESULT" | sed 's/^/  /'
 pause
 
 stage "Last check"
-COUNT="$(aws ssm get-parameters --names "${PARAMS[@]}" --profile "$MEMBER_PROFILE" \
+COUNT="$(MSYS_NO_PATHCONV=1 aws ssm get-parameters --names "${PARAMS[@]}" --profile "$MEMBER_PROFILE" \
   --region "$REGION" --query "length(Parameters[?Type=='SecureString'])" --output text | tr -d '\r')"
 if [[ "$COUNT" != "2" ]]; then
   warn "FAIL: SSM doesn't hold both keys as SecureStrings."
