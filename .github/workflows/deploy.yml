@@ -61,7 +61,11 @@ jobs:
           unzip -q terraform.zip terraform
           echo "$PWD" >> "$GITHUB_PATH"
       # AWS exchanges this token for each account's role. The profiles hold no
-      # credentials, so none can reach the logs. The token lasts minutes.
+      # credentials, so none can reach the logs. GitHub's token lasts about 5
+      # minutes, and Terraform reads the file again whenever it signs in to AWS,
+      # such as before an apply's changes. So a background loop rewrites the file
+      # every 4 minutes until the job ends: on 2026-11-19 a 13-minute stall left
+      # the apply with an expired token (ExpiredTokenException).
       - &sign-in
         name: Point the AWS profiles at this environment's roles
         env:
@@ -73,6 +77,14 @@ jobs:
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
           echo "::add-mask::$token"
           printf %s "$token" > "$RUNNER_TEMP/oidc-token"
+          # Never prints a token. A failed fetch keeps the old file for the next try.
+          nohup bash -c '
+            while sleep 240; do
+              t=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value) || continue
+              case "$t" in ""|null) continue ;; esac
+              printf %s "$t" > "$RUNNER_TEMP/oidc-token.new" && mv "$RUNNER_TEMP/oidc-token.new" "$RUNNER_TEMP/oidc-token"
+            done' >/dev/null 2>&1 &
           mkdir -p ~/.aws
           for profile in "portfolio $PORTFOLIO_ACCOUNT_ID" "cafe $CAFE_ACCOUNT_ID"; do
             set -- $profile
