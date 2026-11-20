@@ -45,6 +45,18 @@ resource "cloudflare_zone_setting" "automatic_https_rewrites" {
   value      = "off"
 }
 
+# Two features that would change what production serves stay dashboard settings,
+# so the token needs no extra permission. Check both on every zone (the steps are
+# in docs/adding-an-episode.md under "A new zone"):
+# - Bot Fight Mode: off. While it's on, the free plan can't turn off its JS
+#   detections, which inject a /cdn-cgi/ script that the CSP blocks and the
+#   served-HTML smoke test fails on. It can also challenge /api/* and the frozen
+#   tests' runners, with no rule to exempt them. Pinning it here would need the
+#   token's Bot Management Edit.
+# - Web Analytics (RUM) automatic setup: disabled, not deleted. Its beacon broke
+#   episode 0's CSP. Pinning it would need Account Settings Write, an account-wide
+#   permission, and the provider doesn't read `enabled` back anyway.
+
 # The rules below match every proxied hostname in the zone, so a proxied record
 # must only ever point at this series' CloudFront. Any other origin would receive
 # the secret.
