@@ -19,17 +19,13 @@ locals {
     )
   }
 
-  # Numeric IDs survive a rename, so a new repo can't take over this trust.
+  # Numeric IDs survive a rename, so a new repo can't take over this trust. They
+  # come from tfvars, not a lookup: an unauthenticated GitHub call hung two applies
+  # until they timed out, and a lookup would trust a recreated repo silently.
   repo_subs = {
     for name, repo in local.repos :
-    name => "repo:v1be-coding@${local.github_owner_id}/${repo}@${data.github_repository.episode[name].repo_id}"
+    name => "repo:v1be-coding@${local.github_owner_id}/${repo}@${var.episodes[name].repo_id}"
   }
-}
-
-data "github_repository" "episode" {
-  for_each = local.repos
-
-  full_name = "v1be-coding/${each.value}"
 }
 
 data "cloudflare_zone" "episode" {

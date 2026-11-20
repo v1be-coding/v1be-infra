@@ -1,7 +1,8 @@
 # Every episode in the series. `org` makes each one's repo from the template,
 # and `episodes` builds its AWS side. `zone` is optional and defaults to the main zone.
-# `repo` is optional and defaults to the episode's name.
-# Example: ulam = { account = "portfolio", subdomain = "ulam", anthropic = true }
+# `repo` is optional and defaults to the episode's name. `repo_id` is the repo's numeric
+# ID, added once `org` has made the repo (docs/adding-an-episode.md, step 3c).
+# Example: ulam = { account = "portfolio", subdomain = "ulam", anthropic = true, repo_id = 123 }
 # An empty subdomain puts a portfolio episode at the zone's apex. `pages = true` is for a
 # site of prerendered pages: clean URLs, a 404 page and security headers in production.
 #
@@ -9,8 +10,8 @@
 # checks and green (episode-template #65).
 episodes = {
   # Episode 0: the series home and the "Ask about Emiliano" chat.
-  portfolio-site = { account = "portfolio", subdomain = "", anthropic = true, pages = true }
+  portfolio-site = { account = "portfolio", subdomain = "", anthropic = true, pages = true, repo_id = 1460931799 }
 
   # Episode 1: AInakupo!, LLM tracing, cost and evals. Later episodes report through it.
-  ainakupo = { account = "portfolio", subdomain = "ainakupo", anthropic = true, pages = true }
+  ainakupo = { account = "portfolio", subdomain = "ainakupo", anthropic = true, pages = true, repo_id = 1464276307 }
 }

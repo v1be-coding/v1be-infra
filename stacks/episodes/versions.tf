@@ -10,10 +10,6 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "5.28.1"
     }
-    github = {
-      source  = "integrations/github"
-      version = "6.13.0"
-    }
     random = {
       source  = "hashicorp/random"
       version = "3.9.1"
@@ -69,8 +65,3 @@ provider "aws" {
 
 # Reads CLOUDFLARE_API_TOKEN, so the token stays out of code and state.
 provider "cloudflare" {}
-
-# No token: this only reads public repo IDs, so CI holds no GitHub login (ADR-0012).
-provider "github" {
-  owner = "v1be-coding"
-}

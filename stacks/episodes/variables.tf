@@ -19,7 +19,7 @@ variable "cafe_account_id" {
 }
 
 variable "episodes" {
-  description = "The series' episodes, from stacks/episodes.tfvars. `repo` defaults to the episode's name."
+  description = "The series' episodes, from stacks/episodes.tfvars. `repo` defaults to the episode's name, and `repo_id` is its repo's numeric ID."
   type = map(object({
     account   = string
     subdomain = string
@@ -27,8 +27,17 @@ variable "episodes" {
     pages     = optional(bool, false)
     zone      = optional(string)
     repo      = optional(string)
+    repo_id   = optional(number)
   }))
   default = {}
+
+  # The CI role trusts the repo by name and numeric ID. The ID exists only once
+  # org has made the repo, so an episode's first plan stops here until a PR adds it
+  # (docs/adding-an-episode.md, step 3c).
+  validation {
+    condition     = alltrue([for episode in var.episodes : try(episode.repo_id > 0 && floor(episode.repo_id) == episode.repo_id, false)])
+    error_message = "Each episode needs repo_id, its repo's numeric ID (a positive whole number): gh api repos/v1be-coding/<repo> --jq .id, once org has made the repo."
+  }
 
   validation {
     condition     = alltrue([for episode in var.episodes : contains(["portfolio", "cafe"], episode.account)])
