@@ -80,3 +80,6 @@ jobs:
       - name: Every aws block names its provider
         if: ${{ !cancelled() }}
         run: bash pr/ci/check-provider-aliases.sh pr/stacks
+      - name: Wizard aws calls set MSYS_NO_PATHCONV per command
+        if: ${{ !cancelled() }}
+        run: bash pr/ci/check-wizard-pathconv.sh pr/sandbox/wizards
