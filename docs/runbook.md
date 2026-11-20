@@ -88,6 +88,22 @@ In the Sandbox, as owner:
 3. Merge the fix.
 4. Run `sandbox/wizards/org-apply.sh`, which puts the rule back. The plan shows the rule being restored.
 
+## Removing an episode
+
+An episode has two halves, and removing it from `episodes.tfvars` removes only `v1be-infra`'s. The episode's own Terraform made its database, Lambda, limits table, alarms and logs, and nothing removes those once its CI role is gone. So remove production first, while the API and secret that `v1be-infra` made still exist: the episode's Terraform reads them.
+
+1. **Close every PR,** so no branch environment is left. Each PR's teardown removes its environment. No `<episode>/pr-*` state should remain in the account's state bucket.
+2. **Destroy the episode's production, in Windows Sandbox as admin.** Turn off the DSQL cluster's deletion protection, which Terraform can't do. Then, from a clone of the episode repo, run `terraform -chdir=infra destroy` against the state at `<episode>/production/terraform.tfstate`, with the variables its `deploy-target.yml` sets and `environment=production`. Check that every line names the episode before typing `yes`, then delete the empty state file. Phase F did this with `phase-f-checks.sh destroy`, a local draft. Turn that into a wizard the next time an episode is removed.
+3. **A PR removing the entry from `episodes.tfvars`.** `deploy-episodes`' plan destroys the CI role, distribution, DNS, certificate and generated secrets. Check that every destroy names this episode. If it was the last `portfolio` episode, the Budgets action goes too.
+4. **Run `org-apply.sh` in Windows Sandbox.** It archives the repo (`archive_on_destroy`), keeping its history, and removes the repo's rules, environments and variables. Then remove the repo from the `v1be-agent` App's installation.
+
+## Removing a provider, a data source or a resource from state
+
+Two traps, both from `v1be-infra` #62 to #65 (2026-11-20):
+
+- **`init` needs a provider while state still names its resources,** data sources included. CI runs `init -lockfile=readonly`, so dropping the provider and the resources in one PR fails at `init`. The checks in `adding-an-episode.md` run `init -backend=false`, which has no state, so they can't catch it. Remove the resources first and keep the provider in `required_providers` and the lock, with no `provider` block. Then remove the provider in a second PR.
+- **`deploy-episodes` applies only when the plan has changes.** A removed data source, or a `moved` or `removed` block on its own, changes state but not the plan, so the apply is skipped and state keeps the old entries. Land it with a real change. If there's none, add an empty `terraform_data` resource, as #64 did, and remove it in the next PR.
+
 ## Renewing tokens
 
 | Token | Lasts | To renew |

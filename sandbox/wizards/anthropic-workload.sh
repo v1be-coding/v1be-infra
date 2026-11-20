@@ -289,6 +289,8 @@ if [[ "$(aws sts get-caller-identity --profile "$MEMBER_PROFILE" --query Account
   exit 1
 fi
 ROLE_SUBJECT="arn:aws:iam::$ACCOUNT_ID:role/$ROLE_PREFIX*"
+# The episode's infra/main.tf names its Lambda role v1be-<episode>-api-<environment>.
+ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/${ROLE_PREFIX}production"
 say "PASS: signed in to portfolio"
 pause
 
@@ -349,6 +351,8 @@ say "Issuer, with discovery mode for the keys:"
 printf '    %s\n' "$ISSUER"
 say "Service account name:  v1be-$EPISODE"
 say "Rule name:             $EPISODE-api"
+say "The form has two role fields. IAM role ARN, exact, production's Lambda role:"
+printf '    %s\n' "$ROLE_ARN"
 say "Subject, ending in * so production and branch environments both match:"
 printf '    %s\n' "$ROLE_SUBJECT"
 say "Audience:              $AUDIENCE"
