@@ -10,6 +10,14 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "5.28.1"
     }
+    # Only until one apply has dropped the old github_repository data from state:
+    # init needs the provider while state names it, and CI's lock file is
+    # read-only. No provider block, so it makes no GitHub call. Remove it, and its
+    # lock entry, in the next PR.
+    github = {
+      source  = "integrations/github"
+      version = "6.13.0"
+    }
     random = {
       source  = "hashicorp/random"
       version = "3.9.1"
