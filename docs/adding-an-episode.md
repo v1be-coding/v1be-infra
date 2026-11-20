@@ -13,7 +13,7 @@ The Setup phase of [`V1BE_CODING.md`](https://github.com/v1be-coding/series/blob
 | 3b. A PR to the episode repo with any notes the spec needs | Claude, as the `v1be-agent` App |
 | 3c. A PR that adds the new repo's `repo_id` to its entry, then the user merges it | Claude, as the `v1be-agent` App |
 | 4. Approve `deploy-episodes`' apply: DNS, certificate, generated secrets, the CI role | The user |
-| 5. Set the episode's Anthropic workspace monthly limit and connect its Lambda in the Console, and enter any other third-party keys into SSM | The user, guided by a `wizard` |
+| 5. Set the episode's Anthropic workspace monthly limit and connect its Lambda in the Console, make its AInakupo keys if it calls a model, and enter any other third-party keys into SSM | The user, guided by a `wizard` |
 
 Claude runs no `terraform plan` or `apply`, and no admin step (ADR-0012).
 
@@ -72,6 +72,7 @@ Write them up with the `wizard` skill, one step at a time, and check each result
   4. Leave `ANTHROPIC_API_KEY` unset. The SDK prefers it over federation.
 
   If federation fails, fall back to a service account key in SSM, as above.
+- **Step 5, AInakupo, only when the app calls a model:** each model call reports a trace to AInakupo (episode 1). After step 4, run `sandbox/wizards/ainakupo-keys.sh <episode>` in Windows Sandbox. It makes the episode's two ingest keys and stores them as SecureStrings at `/<episode>/ainakupo/production-key` and `/<episode>/ainakupo/preview-key`. Step 3b's setup notes, written earlier, should already say the episode reports to AInakupo, so the spec plans for it. The code side (the SDK, `src/ai/traces.ts`, and the Lambda role's `kms:Decrypt`) is the spec's job: the template's `docs/agents/spec.md` has the rule, and `portfolio-site` is the example. An episode with no model call skips this.
 
 ## Rules
 
