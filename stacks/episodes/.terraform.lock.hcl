@@ -44,7 +44,6 @@ provider "registry.terraform.io/hashicorp/aws" {
   ]
 }
 
-
 provider "registry.terraform.io/hashicorp/random" {
   version     = "3.9.1"
   constraints = ">= 3.9.1, 3.9.1"
