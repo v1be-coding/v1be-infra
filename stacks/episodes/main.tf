@@ -102,3 +102,8 @@ module "cafe" {
   zone_id                  = data.cloudflare_zone.episode[local.zones[each.key]].zone_id
   origin_access_control_id = data.terraform_remote_state.edge.outputs.origin_access_control_ids.cafe
 }
+
+# Throwaway: a change, so deploy-episodes runs an apply (it skips one when the
+# plan has no changes), and the apply writes state without #62's removed
+# github_repository data. The next PR removes this and the github provider.
+resource "terraform_data" "state_cleanup" {}
