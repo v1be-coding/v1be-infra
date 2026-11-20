@@ -78,6 +78,28 @@ data "aws_iam_policy_document" "boundary" {
     resources = [local.ssm_path]
   }
 
+  # Reading a SecureString with decryption needs kms:Decrypt as well, and a
+  # boundary limits what the aws/ssm key policy grants a role. Only through
+  # Parameter Store, and only for this episode's own parameters, such as the
+  # AInakupo keys at /<episode>/ainakupo/*.
+  statement {
+    sid       = "DecryptOwnSecrets"
+    actions   = ["kms:Decrypt"]
+    resources = ["arn:aws:kms:ap-southeast-1:${var.account_id}:key/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.ap-southeast-1.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "kms:EncryptionContext:PARAMETER_ARN"
+      values   = [local.ssm_path]
+    }
+  }
+
   # The Lambda's database role. dsql:DbConnectAdmin stays out, so no role CI
   # makes can hold admin rights on a cluster (ADR-0003).
   statement {
